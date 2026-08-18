@@ -1,0 +1,26 @@
+data/*
+!data/.gitkeep
+# The redacted, hand-reviewed public sample — everything else in data/
+# (the real archive, corpus.db, logs) stays private and ignored. Ships
+# under this name specifically, never pre-renamed to PersonalArchive.rnt,
+# so it's never mistaken for — or accidentally overwrites — a real archive.
+!data/PersonalArchiveSubset.rnt
+exports/*
+!exports/.gitkeep
+results/*
+!results/.gitkeep
+# Aggregate statistics and rendered figures — not the archive's own text,
+# safe and intended to be public (analysis_payload.json is the same data
+# already embedded in docs/report/evaluation_report.html, which is public,
+# so there's no privacy reason to hide it separately). eval.db stays
+# ignored — it holds every generated answer's full text, which quotes the
+# private archive extensively.
+!results/table.csv
+!results/analysis_payload.json
+!results/figures/
+!results/figures/*
+.env
+.venv/
+__pycache__/
+*.pyc
+.claude/

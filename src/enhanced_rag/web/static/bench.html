@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retrieval bench</title>
+<style>
+:root{
+  --bg:#ffffff; --bg-panel:#f3f3f3; --bg-hover:#e4eaf2; --bg-active:#ccdaed;
+  --border:#c8c8c8; --border-light:#e0e0e0; --text:#1a1a1a; --text-dim:#777;
+  --accent:#2b5797;
+  --hl-purple:#CC99FF; --hl-pink:#FF99CC; --hl-blue:#CCFFFF; --hl-green:#CCFFCC;
+  --hl-yellow:#FFFF99; --hl-orange:#FFCC99;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+  font-size:13px;line-height:1.55}
+header{border-bottom:1px solid var(--border);padding:10px 20px;display:flex;
+  align-items:baseline;gap:16px;flex-wrap:wrap;position:sticky;top:0;
+  background:var(--bg-panel);z-index:20}
+h1{font-size:12px;margin:0;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--accent)}
+.corpus{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+.corpus b{color:var(--text);font-weight:600}
+nav a{color:var(--text-dim);font-size:11.5px;text-decoration:none;border-bottom:1px solid transparent}
+nav a:hover,nav a:focus{color:var(--accent);border-color:var(--accent)}
+main{padding:20px;max-width:1600px;margin:0 auto}
+
+/* controls */
+.ask{display:flex;gap:8px;margin-bottom:12px}
+textarea{flex:1;background:#fff;border:1px solid var(--border);color:var(--text);
+  border-radius:4px;padding:10px 12px;font:inherit;resize:vertical;min-height:48px}
+textarea:focus,select:focus,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button{background:var(--accent);color:#fff;border:0;border-radius:4px;
+  padding:0 20px;font:600 13px var(--sans);cursor:pointer;white-space:nowrap}
+button.ghost{background:transparent;color:var(--text-dim);border:1px solid var(--border)}
+button.ghost:hover{color:var(--text);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:progress}
+
+.picker{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.chip{border:1px solid var(--border);background:#fff;border-radius:999px;
+  padding:5px 12px;font:500 12px var(--sans);color:var(--text-dim);cursor:pointer;
+  display:flex;gap:6px;align-items:center}
+.chip[aria-pressed="true"]{border-color:var(--accent);color:var(--text);background:var(--bg-hover)}
+.chip code{font:10.5px var(--mono);color:var(--accent)}
+.hint{color:var(--text-dim);font-size:12px;margin:0 0 14px}
+.presets{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px}
+.presets button{background:transparent;border:1px solid var(--border);color:var(--text-dim);
+  font:400 11.5px var(--sans);padding:4px 10px;border-radius:4px}
+.presets button:hover{color:var(--text);border-color:var(--accent)}
+.modelbar{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px;color:var(--text-dim);flex-wrap:wrap}
+.modelbar select{background:#fff;color:var(--text);border:1px solid var(--border);
+  border-radius:4px;padding:5px 8px;font:inherit}
+#warn{color:#c33;font-size:11.5px}
+.banner{background:#fdecec;border:1px solid #e3b3b3;color:#a33;padding:10px 14px;
+  border-radius:4px;margin-bottom:14px;font-size:13px}
+
+/* sliders */
+.sliders{display:flex;gap:24px;flex-wrap:wrap;align-items:center;background:var(--bg-panel);
+  border:1px solid var(--border-light);border-radius:6px;padding:10px 16px;margin-bottom:12px}
+.slider-ctl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim)}
+.slider-ctl input[type=range]{width:140px}
+.slider-ctl b{color:var(--text);font-family:var(--mono);min-width:28px;display:inline-block;text-align:right}
+.slider-ctl .reset{cursor:pointer;color:var(--accent);font-size:11px;border-bottom:1px dotted var(--accent)}
+
+/* results */
+.cols{display:grid;gap:14px;align-items:start;
+  grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
+.col{background:#fff;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.col h2{margin:0;padding:10px 14px;font-size:12.5px;font-weight:600;letter-spacing:.02em;
+  border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;gap:10px;
+  background:var(--bg-panel)}
+.col h2 span{font:10.5px var(--mono);color:var(--text-dim);font-weight:400}
+
+.spectrum{display:flex;height:5px}
+.spectrum i{flex:1;background:#e0e0e0}
+.metrics{display:flex;flex-wrap:wrap;gap:12px;padding:8px 14px;
+  font:11px var(--mono);color:var(--text-dim);border-bottom:1px solid var(--border-light)}
+.metrics b{color:var(--text);font-weight:600}
+.answer{padding:14px;white-space:pre-wrap}
+.answer.err{color:#c33}
+details{border-top:1px solid var(--border-light)}
+summary{padding:8px 14px;font:11px var(--mono);color:var(--text-dim);cursor:pointer}
+summary:hover{color:var(--text)}
+.frag{padding:7px 14px 7px 11px;border-left:3px solid transparent;
+  border-top:1px solid var(--border-light);font-size:12.5px}
+.frag .meta{font:10px var(--mono);color:var(--text-dim);display:flex;gap:8px;
+  flex-wrap:wrap;margin-bottom:3px}
+.frag .path{color:#999;overflow-wrap:anywhere}
+.frag.expanded{opacity:.65}
+.empty{padding:14px;color:var(--text-dim)}
+.spinner{display:inline-block;width:10px;height:10px;border:2px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;animation:s .7s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation-duration:2s}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Retrieval bench</h1>
+  <div class="corpus" id="corpus">loading corpus…</div>
+  <nav><a href="/">Archive explorer</a> · <a href="/rag/export">Bulk export</a> · <a href="/rag/rate">Rate answers →</a></nav>
+</header>
+<div id="lmhint" style="font:11px var(--mono,monospace);color:var(--text-dim,#777);background:var(--bg-panel,#f3f3f3);border-bottom:1px solid var(--border,#c8c8c8);padding:5px 20px">
+  Local generator not answering? <code>lms ps</code> to check what's loaded — unload
+  duplicates first (<code>lms unload --all</code>, a stale extra instance can silently
+  answer instead of the one you just loaded), then <code>lms server start</code> and
+  <code>lms load gemma4-26b-a4b-uncensored-hauhaucs-balanced-q4_k_p -c 16384 -y</code>
+  (context must be 16384, not the 4096 default, or answers can cut off mid-generation).
+</div>
+
+<main>
+  <div class="picker" id="picker"></div>
+  <p class="hint" id="hint"></p>
+
+  <div class="sliders">
+    <div class="slider-ctl">
+      <label><input type="checkbox" id="sl-budget-mode" /> Fill context %</label>
+      <input type="range" id="sl-budget" min="5" max="90" step="5" value="40" disabled />
+      <b id="sl-budget-v">40%</b>
+    </div>
+    <div class="slider-ctl">
+      <label for="sl-topk">Fragments</label>
+      <input type="range" id="sl-topk" min="1" max="150" step="1" value="12" />
+      <b id="sl-topk-v">12</b>
+    </div>
+    <div class="slider-ctl">
+      <label for="sl-minw">Min weight</label>
+      <input type="range" id="sl-minw" min="0" max="5" step="0.5" value="0" />
+      <b id="sl-minw-v">off</b>
+    </div>
+    <div class="slider-ctl">
+      <label><input type="checkbox" id="sl-narrative" /> Organic prose (no "[1]" citations)</label>
+    </div>
+    <span class="reset" id="sl-reset" title="Use each regime's own preset values instead of these overrides">Reset to regime defaults</span>
+  </div>
+  <p class="hint" id="tok-hint" style="margin-top:-8px"></p>
+
+  <div class="modelbar"><label for="gen">Model</label><select id="gen"></select><span id="warn"></span>
+    <span class="reset" id="sysprompt-toggle">Show system prompt</span>
+  </div>
+  <pre id="sysprompt-box" style="display:none;white-space:pre-wrap;background:var(--bg-panel);
+    border:1px solid var(--border);border-radius:4px;padding:10px 12px;font:11px var(--mono);
+    color:var(--text-dim);margin:0 0 12px"></pre>
+
+  <div class="ask">
+    <textarea id="q" rows="2" placeholder="Ask the archive a question…"></textarea>
+    <button id="go">Ask</button>
+    <button id="ret" class="ghost" title="Retrieve fragments without calling the language model">Retrieve only</button>
+    <button id="copyctx" class="ghost" title="Retrieve with the current settings and copy the formatted fragments to the clipboard — for pasting into ChatGPT, Claude, Gemini, etc.">Copy context</button>
+  </div>
+  <div class="presets" id="presets"></div>
+
+  <div class="cols" id="cols"></div>
+</main>
+
+<script>
+let REG={}, COLORS={}, chosen=new Set(), overridesActive=true;
+let GENERATORS={}, AVG_CHARS_PER_FRAG=90;
+
+const esc = s => (s||"").replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+async function boot(){
+  const r = await (await fetch('/rag/api/config')).json();
+  COLORS = r.colours;
+  r.regimes.forEach(x=>REG[x.key]=x);
+  r.default_regimes.forEach(k=>chosen.add(k));
+  const p = document.getElementById('picker');
+  r.regimes.forEach(x=>{
+    const b=document.createElement('button');
+    b.className='chip'; b.type='button';
+    b.setAttribute('aria-pressed', chosen.has(x.key));
+    b.title = x.blurb;
+    b.innerHTML = `<code>${x.key.split('_')[0]}</code>${esc(x.label.replace(/^R\d+ · /,''))}`;
+    b.onclick=()=>{ chosen.has(x.key)?chosen.delete(x.key):chosen.add(x.key);
+      b.setAttribute('aria-pressed', chosen.has(x.key)); updateHint(); };
+    p.appendChild(b);
+  });
+  updateHint();
+
+  r.generators.forEach(m=>GENERATORS[m.key]=m);
+  const g=document.getElementById('gen');
+  r.generators.forEach(m=>{
+    const o=document.createElement('option');
+    o.value=m.key; o.textContent=m.label+(m.ready?'':'  (no API key)');
+    o.selected=m.key===r.default_generator; g.appendChild(o);
+  });
+  g.onchange=()=>{
+    const m=r.generators.find(x=>x.key===g.value);
+    document.getElementById('warn').textContent =
+      m && !m.ready ? 'Add its API key to .env, then restart the server.' : '';
+    updateBudget();
+  };
+
+  if(r.error){
+    document.querySelector('main').insertAdjacentHTML('afterbegin',
+      `<div class="banner">${esc(r.error)}</div>`);
+    document.getElementById('corpus').textContent='corpus not loaded';
+    return;
+  }
+
+  const s = await (await fetch('/rag/api/stats')).json();
+  AVG_CHARS_PER_FRAG = s.avg_chars_per_fragment || 90;
+  document.getElementById('corpus').innerHTML =
+    `<b>${s.fragments.toLocaleString()}</b> fragments · <b>${s.highlighted.toLocaleString()}</b> highlighted · `+
+    `<b>${s.notes.toLocaleString()}</b> notes · ${esc(s.embed_model)}`;
+  updateBudget();
+  updateTokHint();
+
+  SYSTEM_PROMPT = r.system_prompt; NARRATIVE_NOTE = r.narrative_note;
+  refreshSystemPromptBox();
+
+  const qs = await (await fetch('/rag/api/questions')).json();
+  const pre = document.getElementById('presets');
+  qs.questions.slice(0,10).forEach(q=>{
+    const b=document.createElement('button');
+    b.textContent = q.id+' · '+q.q.slice(0,52)+(q.q.length>52?'…':'');
+    b.onclick=()=>{document.getElementById('q').value=q.q;};
+    pre.appendChild(b);
+  });
+}
+
+// ── System prompt panel — shows exactly what's sent, including the
+// per-regime additions (colour legend, narrative-mode instruction) ──
+let SYSTEM_PROMPT='', NARRATIVE_NOTE='';
+function refreshSystemPromptBox(){
+  let text = SYSTEM_PROMPT;
+  text += '\n\n[+ colour legend appended for regimes with explain_colors, e.g. R6]';
+  if(slNarrative.checked) text += '\n\n' + NARRATIVE_NOTE;
+  document.getElementById('sysprompt-box').textContent = text;
+}
+document.getElementById('sysprompt-toggle').onclick=()=>{
+  const box=document.getElementById('sysprompt-box');
+  const show = box.style.display==='none';
+  box.style.display = show?'block':'none';
+  document.getElementById('sysprompt-toggle').textContent = show?'Hide system prompt':'Show system prompt';
+  if(show) refreshSystemPromptBox();
+};
+
+// ── Copy context — retrieve with current settings, format with the
+// archive's own colour tags, and put it on the clipboard for pasting into
+// any chat UI (ChatGPT, Claude, Gemini, ...), sized by the same Fragments/
+// budget slider used for the live Ask flow ──
+async function copyText(text){
+  try{ await navigator.clipboard.writeText(text); return true; }
+  catch(e){
+    // Some browser/webview contexts deny the Permissions-API clipboard
+    // write even on a genuine click — fall back to select+execCommand,
+    // which works off DOM selection instead.
+    const ta=document.createElement('textarea');
+    ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    let ok=false; try{ ok=document.execCommand('copy'); }catch(e2){ ok=false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+}
+
+document.getElementById('copyctx').onclick=async()=>{
+  const query=document.getElementById('q').value.trim();
+  const btn=document.getElementById('copyctx');
+  if(!query){document.getElementById('q').focus();return;}
+  btn.disabled=true; const orig=btn.textContent; btn.textContent='Retrieving…';
+  try{
+    const res=await (await fetch('/rag/api/ask',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query,regimes:['R6_full_metadata'],retrieval_only:true,
+        overrides:currentOverrides()||{top_k:parseInt(slTopk.value,10)}})})).json();
+    const r = res.results && res.results[0];
+    if(!r || r.error || !r.fragments.length){btn.textContent='Nothing to copy';setTimeout(()=>btn.textContent=orig,1500);return;}
+    const legendLines = Object.entries(COLORS).map(([code,hex])=>code).join(', ');
+    let out = `Fragments from a personal knowledge archive, tagged with the author's own highlight system `+
+      `([TAG]...[/TAG]) — not markdown. Higher-signal colours (purple/pink/blue/green) mark content the `+
+      `author judged good; orange/yellow flag weaker or provisional content, though colour sometimes marks `+
+      `contrast instead of a judgement — use your own reading when ambiguous.\n\n`;
+    out += r.fragments.map(f=>{
+      const tag = f.color ? `[${f.color.toUpperCase()}${f.is_bold?'*':''}]` : '';
+      const path = f.tree_path ? ` (${f.tree_path})` : '';
+      return tag ? `${tag}${path}\n${f.text}` : f.text;
+    }).join('\n\n');
+    out += `\n\nQuestion: ${query}`;
+    const ok = await copyText(out);
+    btn.textContent = ok
+      ? `Copied ${r.fragments.length} fragments (~${Math.round(out.length/4).toLocaleString()} tokens)`
+      : 'Copy failed — select the text manually';
+  }catch(e){
+    btn.textContent = 'Copy failed';
+  }finally{
+    setTimeout(()=>{btn.textContent=orig;btn.disabled=false;},2200);
+  }
+};
+
+function updateHint(){
+  document.getElementById('hint').textContent =
+    chosen.size ? `Comparing ${chosen.size} regime${chosen.size>1?'s':''} on the same question.`
+                : 'Select at least one regime to compare.';
+}
+
+// ── Sliders: how much context the model gets, live-adjustable per query ──
+const slTopk=document.getElementById('sl-topk'), slTopkV=document.getElementById('sl-topk-v');
+const slMinw=document.getElementById('sl-minw'), slMinwV=document.getElementById('sl-minw-v');
+const slBudgetMode=document.getElementById('sl-budget-mode');
+const slBudget=document.getElementById('sl-budget'), slBudgetV=document.getElementById('sl-budget-v');
+const slNarrative=document.getElementById('sl-narrative');
+
+slTopk.oninput=()=>{overridesActive=true; slTopkV.textContent=slTopk.value; updateTokHint()};
+slMinw.oninput=()=>{overridesActive=true; slMinwV.textContent = slMinw.value==='0' ? 'off' : slMinw.value};
+slNarrative.onchange=()=>{overridesActive=true; refreshSystemPromptBox();};
+
+// Absolute token estimate for whatever the Fragments slider currently
+// resolves to, so "40%" isn't a black box — shows real numbers and updates
+// live as the model (and its context_window) changes.
+function updateTokHint(){
+  const n = parseInt(slTopk.value,10);
+  const gen = GENERATORS[document.getElementById('gen').value];
+  const ctx = (gen && gen.context_window) || 8192;
+  const estTokens = Math.round(n * AVG_CHARS_PER_FRAG / 4);
+  const pct = ((estTokens/ctx)*100).toFixed(0);
+  document.getElementById('tok-hint').textContent =
+    `≈ ${estTokens.toLocaleString()} tokens of context for ${n} fragments `+
+    `(~${pct}% of ${gen?gen.label:'the'} model's ${ctx.toLocaleString()}-token window)`;
+}
+
+// Context-budget mode: instead of picking a raw fragment count, pick what
+// fraction of the model's context window to fill, and derive top_k from
+// that generator's context_window and the corpus's average fragment
+// length. Reserves headroom for the system prompt, question, and the
+// model's own answer so a high budget doesn't starve generation.
+const RESERVE_TOKENS = 1200;
+function updateBudget(){
+  if(!slBudgetMode.checked) return;
+  const gen = GENERATORS[document.getElementById('gen').value];
+  const ctx = (gen && gen.context_window) || 8192;
+  const pct = parseInt(slBudget.value,10)/100;
+  const budgetTokens = Math.max(0, ctx*pct - RESERVE_TOKENS);
+  const tokensPerFrag = Math.max(1, AVG_CHARS_PER_FRAG/4); // ~4 chars/token
+  const n = Math.max(1, Math.min(150, Math.round(budgetTokens/tokensPerFrag)));
+  slTopk.value = n; slTopkV.textContent = n;
+  overridesActive = true;
+  updateTokHint();
+}
+slBudgetMode.onchange=()=>{
+  slBudget.disabled = !slBudgetMode.checked;
+  slTopk.disabled = slBudgetMode.checked;
+  if(slBudgetMode.checked) updateBudget();
+};
+slBudget.oninput=()=>{ slBudgetV.textContent=slBudget.value+'%'; updateBudget(); };
+document.getElementById('gen').addEventListener('change', updateTokHint);
+
+document.getElementById('sl-reset').onclick=()=>{
+  overridesActive=false;
+  slTopk.value=12; slTopkV.textContent='12'; slTopk.disabled=false;
+  slMinw.value=0; slMinwV.textContent='off';
+  slBudgetMode.checked=false; slBudget.disabled=true;
+  slNarrative.checked=false;
+  updateTokHint();
+};
+function currentOverrides(){
+  if(!overridesActive) return null;
+  return {
+    top_k: parseInt(slTopk.value,10),
+    min_weight: slMinw.value==='0' ? null : parseFloat(slMinw.value),
+    narrative_style: slNarrative.checked || null,
+  };
+}
+
+async function ask(retrievalOnly){
+  const query=document.getElementById('q').value.trim();
+  if(!query){document.getElementById('q').focus();return;}
+  if(!chosen.size){updateHint();return;}
+  const cols=document.getElementById('cols');
+  const regimes=[...chosen];
+  cols.innerHTML = regimes.map(k=>
+    `<section class="col" id="col-${k}"><h2>${esc(REG[k].label)}<span class="spinner"></span></h2>
+     <div class="empty">Retrieving…</div></section>`).join('');
+  ['go','ret'].forEach(id=>document.getElementById(id).disabled=true);
+
+  if(retrievalOnly){
+    // Retrieval-only doesn't need streaming — one round trip is already fast.
+    try{
+      const res=await (await fetch('/rag/api/ask',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({query,regimes,retrieval_only:true,
+          generator:document.getElementById('gen').value,
+          overrides:currentOverrides()})})).json();
+      if(res.error){cols.innerHTML=`<div class="empty">${esc(res.error)}</div>`;return;}
+      cols.innerHTML=res.results.map(render).join('');
+    }catch(e){
+      cols.innerHTML=`<div class="empty">Request failed: ${esc(e.message)}. Check the server console.</div>`;
+    }finally{
+      ['go','ret'].forEach(id=>document.getElementById(id).disabled=false);
+    }
+    return;
+  }
+
+  // Streaming: one SSE connection per selected regime, so a slow model in
+  // one column doesn't block the others from filling in as they finish.
+  const gen=document.getElementById('gen').value;
+  const overrides=currentOverrides();
+  const params=new URLSearchParams({query, generator:gen});
+  if(overrides) params.set('overrides', JSON.stringify(overrides));
+  let pending=regimes.length;
+  const done=()=>{ if(--pending<=0) ['go','ret'].forEach(id=>document.getElementById(id).disabled=false); };
+
+  regimes.forEach(k=>{
+    const col=document.getElementById(`col-${k}`);
+    const p=new URLSearchParams(params); p.set('regime', k);
+    const es=new EventSource(`/rag/api/ask_stream?${p.toString()}`);
+    let answerText='';
+    es.addEventListener('meta', e=>{
+      const meta=JSON.parse(e.data);
+      col.innerHTML = renderShell(meta);
+    });
+    es.addEventListener('delta', e=>{
+      answerText += JSON.parse(e.data);
+      const box=col.querySelector('.answer');
+      if(box) box.textContent = answerText;
+    });
+    es.addEventListener('generate_s', e=>{
+      const span=col.querySelector('h2 span');
+      if(span){ const s=span.textContent.match(/^([\d.]+s) \+/); if(s) span.textContent=`${s[1]} + ${JSON.parse(e.data)}s`; }
+    });
+    es.addEventListener('error', e=>{
+      const msg = e.data ? JSON.parse(e.data) : 'Connection lost.';
+      col.innerHTML = `<h2>${esc(REG[k].label)}</h2><div class="answer err">${esc(msg)}</div>`;
+      es.close(); done();
+    });
+    es.addEventListener('done', ()=>{ es.close(); done(); });
+  });
+}
+
+// Renders everything except the streamed answer text — used once the
+// 'meta' event arrives, before any tokens have come in yet.
+function renderShell(r){
+  const m=r.metrics, f=r.fragments;
+  const spectrum = f.map(x=>`<i style="background:${COLORS[x.color]||'#e0e0e0'}"></i>`).join('') || '<i style="background:#e0e0e0"></i>';
+  const frags = f.map((x,i)=>{
+    const c=COLORS[x.color]||'#e0e0e0';
+    const tag=x.color?`${x.color.toUpperCase()} w${x.weight}`:'unmarked';
+    return `<div class="frag ${x.source==='expanded'?'expanded':''}" style="border-left-color:${c}">
+      <div class="meta"><span>[${i+1}]</span><span>${tag}</span>
+      <span>cos ${(x.cosine||0).toFixed(3)}</span>
+      ${x.source==='expanded'?'<span>note-expanded</span>':''}
+      <span class="path">${esc(x.tree_path||x.caption)}</span></div>
+      ${esc(x.text)}</div>`;
+  }).join('') || '<div class="empty">Nothing retrieved.</div>';
+  const trimNote = m.n_trimmed_to_fit ? `<span style="color:#c33">-${m.n_trimmed_to_fit} trimmed to fit context</span>` : '';
+  return `<h2>${esc(r.regime_label)}<span>${m.retrieve_s}s + …</span></h2>
+    ${r.generator_label?`<div style="padding:4px 14px;font:11px var(--mono);color:var(--text-dim);border-bottom:1px solid var(--border-light)">${esc(r.generator_label)}</div>`:''}
+    <div class="spectrum">${spectrum}</div>
+    <div class="metrics">
+      <span><b>${m.n_fragments}</b> fragments</span>
+      <span>mean weight <b>${m.mean_weight}</b></span>
+      <span><b>${m.pct_highlighted}%</b> highlighted</span>
+      <span><b>${m.distinct_notes}</b> notes</span>
+      <span><b>${m.context_chars.toLocaleString()}</b> chars</span>
+      ${trimNote}
+    </div>
+    <div class="answer"></div>
+    <details><summary>Retrieved fragments (${m.n_fragments})</summary>${frags}</details>`;
+}
+
+function render(r){
+  if(r.error) return `<section class="col"><h2>${esc(r.regime_label)}</h2>
+    <div class="answer err">${esc(r.error)}</div></section>`;
+  const m=r.metrics, f=r.fragments;
+  const spectrum = f.map(x=>
+    `<i style="background:${COLORS[x.color]||'#e0e0e0'}"></i>`).join('') ||
+    '<i style="background:#e0e0e0"></i>';
+  const frags = f.map((x,i)=>{
+    const c=COLORS[x.color]||'#e0e0e0';
+    const tag=x.color?`${x.color.toUpperCase()} w${x.weight}`:'unmarked';
+    return `<div class="frag ${x.source==='expanded'?'expanded':''}" style="border-left-color:${c}">
+      <div class="meta"><span>[${i+1}]</span><span>${tag}</span>
+      <span>cos ${x.cosine.toFixed(3)}</span>
+      ${x.source==='expanded'?'<span>note-expanded</span>':''}
+      <span class="path">${esc(x.tree_path||x.caption)}</span></div>
+      ${esc(x.text)}</div>`;
+  }).join('') || '<div class="empty">Nothing retrieved.</div>';
+
+  const trimNote = m.n_trimmed_to_fit ? `<span style="color:#c33">-${m.n_trimmed_to_fit} trimmed to fit context</span>` : '';
+  return `<section class="col">
+    <h2>${esc(r.regime_label)}<span>${m.retrieve_s}s + ${m.generate_s}s</span></h2>
+    ${r.generator_label?`<div style="padding:4px 14px;font:11px var(--mono);color:var(--text-dim);border-bottom:1px solid var(--border-light)">${esc(r.generator_label)}</div>`:''}
+    <div class="spectrum">${spectrum}</div>
+    <div class="metrics">
+      <span><b>${m.n_fragments}</b> fragments</span>
+      <span>mean weight <b>${m.mean_weight}</b></span>
+      <span><b>${m.pct_highlighted}%</b> highlighted</span>
+      <span><b>${m.distinct_notes}</b> notes</span>
+      <span><b>${m.context_chars.toLocaleString()}</b> chars</span>
+      ${trimNote}
+    </div>
+    <div class="answer">${esc(r.answer)||'<span style="color:#777">Retrieval only — no answer generated.</span>'}</div>
+    <details><summary>Retrieved fragments (${m.n_fragments})</summary>${frags}</details>
+  </section>`;
+}
+
+document.getElementById('go').onclick=()=>ask(false);
+document.getElementById('ret').onclick=()=>ask(true);
+document.getElementById('q').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))ask(false);
+});
+boot();
+</script>
+</body>
+</html>

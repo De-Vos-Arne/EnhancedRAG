@@ -1,0 +1,334 @@
+<title>Metadata RAG Evaluation</title>
+<style>
+:root{
+  color-scheme: light;
+  --surface:      #faf8f4;
+  --surface-2:    #f2efe7;
+  --card:         #ffffff;
+  --ink:          #211d17;
+  --ink-2:        #5b5344;
+  --ink-mute:     #8b8371;
+  --line:         #e4ddd0;
+  --line-2:       #d6cdba;
+  --accent:       #ab6a2f;
+  --accent-ink:   #ffffff;
+  --good:         #2f6f4e;
+  --bad:          #a14a3d;
+  --seq-100:#e4eefb; --seq-150:#d2e3f9; --seq-200:#b7d3f6; --seq-250:#9ec5f4;
+  --seq-300:#6da7ec; --seq-350:#5598e7; --seq-400:#3987e5; --seq-450:#2a78d6;
+  --seq-500:#256abf; --seq-550:#1c5cab; --seq-600:#184f95; --seq-650:#104281;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface:      #17140f;
+    --surface-2:    #1f1b14;
+    --card:         #221e17;
+    --ink:          #f2ede2;
+    --ink-2:        #cabfa9;
+    --ink-mute:     #8f8570;
+    --line:         #372f22;
+    --line-2:       #453b2b;
+    --accent:       #e6a35c;
+    --accent-ink:   #201400;
+    --good:         #6fbf94;
+    --bad:          #e08a7a;
+    --seq-100:#132132; --seq-150:#152a41; --seq-200:#173355; --seq-250:#193e69;
+    --seq-300:#1c4c81; --seq-350:#1f5a99; --seq-400:#2569ac; --seq-450:#2f78bd;
+    --seq-500:#3987e5; --seq-550:#5598e7; --seq-600:#6da7ec; --seq-650:#86b6ef;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface:      #17140f;
+  --surface-2:    #1f1b14;
+  --card:         #221e17;
+  --ink:          #f2ede2;
+  --ink-2:        #cabfa9;
+  --ink-mute:     #8f8570;
+  --line:         #372f22;
+  --line-2:       #453b2b;
+  --accent:       #e6a35c;
+  --accent-ink:   #201400;
+  --good:         #6fbf94;
+  --bad:          #e08a7a;
+  --seq-100:#132132; --seq-150:#152a41; --seq-200:#173355; --seq-250:#193e69;
+  --seq-300:#1c4c81; --seq-350:#1f5a99; --seq-400:#2569ac; --seq-450:#2f78bd;
+  --seq-500:#3987e5; --seq-550:#5598e7; --seq-600:#6da7ec; --seq-650:#86b6ef;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--surface); color:var(--ink);
+  font-family: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  -webkit-font-smoothing:antialiased;
+}
+.sans{font-family: "Segoe UI", system-ui, -apple-system, sans-serif;}
+.mono{font-family: ui-monospace, "SF Mono", Consolas, monospace; font-variant-numeric: tabular-nums;}
+
+.wrap{max-width:920px; margin:0 auto; padding:0 24px 100px}
+
+header.top{
+  border-bottom:1px solid var(--line); padding:44px 0 30px;
+  display:flex; flex-direction:column; gap:6px;
+}
+.eyebrow{
+  font-family:inherit; font-family:"Segoe UI",system-ui,sans-serif;
+  font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--accent); font-weight:600;
+}
+h1{
+  font-size:clamp(28px,4vw,38px); margin:2px 0 0; font-weight:600;
+  text-wrap:balance; line-height:1.15; letter-spacing:-.01em;
+}
+.dek{
+  font-family:"Segoe UI",system-ui,sans-serif; color:var(--ink-2);
+  font-size:15px; max-width:62ch; line-height:1.6; margin-top:10px;
+}
+
+section{padding:40px 0; border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:0}
+h2{
+  font-family:"Segoe UI",system-ui,sans-serif; font-size:11.5px;
+  letter-spacing:.12em; text-transform:uppercase; font-weight:700;
+  color:var(--ink-mute); margin:0 0 18px;
+}
+h3{font-size:20px; font-weight:600; margin:0 0 8px; text-wrap:balance}
+p{font-family:"Segoe UI",system-ui,sans-serif; color:var(--ink-2); line-height:1.65; font-size:14.5px; margin:0 0 12px}
+p:last-child{margin-bottom:0}
+
+/* stat tiles */
+.tiles{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.tile{background:var(--card); padding:18px 16px}
+.tile .v{font-size:26px; font-weight:600; font-variant-numeric:tabular-nums}
+.tile .l{font-family:"Segoe UI",system-ui,sans-serif; font-size:11px; color:var(--ink-mute); text-transform:uppercase; letter-spacing:.06em; margin-top:4px}
+@media (max-width:700px){ .tiles{grid-template-columns:repeat(2,1fr)} }
+
+/* bar chart */
+.barchart{display:flex; flex-direction:column; gap:10px; margin-top:6px}
+.bar-row{display:grid; grid-template-columns:168px 1fr 108px; align-items:center; gap:12px}
+.bar-row .rlabel{font-family:"Segoe UI",system-ui,sans-serif; font-size:12.5px; color:var(--ink); text-align:right}
+.bar-track{position:relative; height:22px; background:var(--surface-2); border-radius:4px; overflow:visible}
+.bar-fill{position:absolute; top:0; left:0; height:100%; border-radius:4px}
+.bar-ci{position:absolute; top:-3px; height:28px; width:2px; background:var(--ink); opacity:.35}
+.bar-row .rval{font-family:"Segoe UI",system-ui,sans-serif; font-size:12.5px; color:var(--ink-2); font-variant-numeric:tabular-nums}
+.bar-row .rval b{color:var(--ink); font-size:14px}
+.chart-note{font-family:"Segoe UI",system-ui,sans-serif; font-size:11.5px; color:var(--ink-mute); margin-top:14px}
+
+/* heatmap */
+.heatwrap{overflow-x:auto}
+table.heatmap{border-collapse:separate; border-spacing:3px; width:100%; font-family:"Segoe UI",system-ui,sans-serif; font-size:12.5px}
+table.heatmap th, table.heatmap td{padding:9px 12px; text-align:center; white-space:nowrap}
+table.heatmap thead th{
+  font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-mute);
+  font-weight:600; border-bottom:2px solid var(--line-2); vertical-align:bottom;
+}
+table.heatmap thead th.rowhead{text-align:left}
+table.heatmap tbody th{
+  text-align:left; font-weight:600; color:var(--ink); white-space:normal; max-width:190px;
+  font-size:12px; line-height:1.3; background:var(--surface-2); border-radius:4px;
+}
+table.heatmap td{color:var(--ink); font-variant-numeric:tabular-nums; border-radius:4px; border:1px solid rgba(0,0,0,.06)}
+
+/* findings */
+.findings{display:flex; flex-direction:column; gap:14px}
+.finding{
+  background:var(--card); border:1px solid var(--line); border-left:3px solid var(--accent);
+  border-radius:8px; padding:16px 18px;
+}
+.finding h4{margin:0 0 6px; font-size:15px; font-weight:600}
+.finding p{margin:0}
+.finding .tag{
+  display:inline-block; font-family:"Segoe UI",system-ui,sans-serif; font-size:10px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:6px;
+}
+
+/* per-question table */
+.qtable{width:100%; border-collapse:collapse; font-family:"Segoe UI",system-ui,sans-serif; font-size:12.5px}
+.qtable th{font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-mute); font-weight:600; text-align:left; padding:6px 8px; border-bottom:1px solid var(--line-2)}
+.qtable td{padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top}
+.qtable td.num{text-align:center; font-variant-numeric:tabular-nums; border-radius:3px}
+.qtable .qid{font-weight:700; color:var(--accent); font-size:11px}
+.qtable .qtext{color:var(--ink); max-width:280px}
+.group-divider td{border-top:2px solid var(--line-2)}
+
+/* notes */
+.notegrid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+@media (max-width:700px){ .notegrid{grid-template-columns:1fr} }
+.notecard{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px 16px}
+.notecard .meta{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; font-family:"Segoe UI",system-ui,sans-serif}
+.notecard .qid{font-size:11px; font-weight:700; color:var(--ink-mute); letter-spacing:.04em}
+.notecard .score{font-size:15px; font-weight:700; font-variant-numeric:tabular-nums}
+.notecard .regime{font-family:"Segoe UI",system-ui,sans-serif; font-size:11px; color:var(--ink-mute); margin-bottom:6px}
+.notecard blockquote{margin:0; font-size:13.5px; line-height:1.55; color:var(--ink); font-style:italic}
+
+.score-good{color:var(--good)} .score-bad{color:var(--bad)}
+
+footer{padding:36px 0 0; font-family:"Segoe UI",system-ui,sans-serif; font-size:12px; color:var(--ink-mute); line-height:1.7}
+footer code{background:var(--surface-2); padding:1px 5px; border-radius:3px; font-size:11.5px}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">Belief-System archive · R0–R8 · blind-rated</div>
+  <h1>Does metadata-enhanced retrieval actually help?</h1>
+  <p class="dek">27 questions, 243 answers, one "Overall" score each (0–100), collected blind. Nine regimes span a lexical baseline (R0) up through full metadata fusion (R6), a raw long-context control (R7), and pooled keyword+vector curation (R8).</p>
+</header>
+
+<section id="overview">
+  <h2>Headline</h2>
+  <div class="tiles" id="tiles"></div>
+  <p style="margin-top:18px;max-width:66ch">Quality climbs almost monotonically from the keyword baseline to the metadata-aware regimes, and every regime from R1 onward beats R0 with a statistically significant margin (paired t-test, 95% CI excludes zero — see <code class="mono" style="background:var(--surface-2);padding:1px 5px;border-radius:3px;font-size:12px">results/table.csv</code>). The improvement is not attributable to any single mechanism: weighting, tree-path embedding, highlighted-only filtering, and prompt-visible metadata each add a further increment on their own.</p>
+</section>
+
+<section id="barchart">
+  <h2>Overall quality by regime</h2>
+  <div class="barchart" id="bars"></div>
+  <div class="chart-note">Bar = mean Overall score (n=27 each). Tick = 95% confidence interval. Colour deepens with regime index, R0 → R8, representing the accumulation of retrieval sophistication rather than an unordered category. Print-ready versions of this chart, the heatmap below, a spread/distribution chart, and a full 27-question × 9-regime heatmap are in <code style="background:var(--surface-2);padding:1px 5px;border-radius:3px">results/figures/</code> (PNG 300dpi and SVG).</div>
+</section>
+
+<section id="heatmap">
+  <h2>Mean overall, by question group × regime</h2>
+  <p style="margin-bottom:16px">The literature predicts gains are <em>uneven</em> across question type — this is where that shows up. Darker = higher score. The identical figure as a static image (for copying exact values, or for the thesis document) is <code style="background:var(--surface-2);padding:1px 5px;border-radius:3px">results/figures/fig2_group_regime_heatmap.png</code>.</p>
+  <div class="heatwrap"><table class="heatmap" id="heatmap"></table></div>
+</section>
+
+<section id="findings">
+  <h2>What the data actually shows</h2>
+  <div class="findings">
+
+    <div class="finding">
+      <span class="tag">Corrected premise</span>
+      <h4>X2 ("quantum computing") did not test what it was designed to test</h4>
+      <p>X2 was written as an out-of-corpus stress test. It is not one: the archive contains a genuine "Quantum computer notes" section — business and technology tangents, not doctrine — inside the in-scope pages. R6 and R8 both named that section directly and scored accordingly low (7, 9), correctly, because the section itself is thin. The more informative result is elsewhere: R2, R4 and R5 all stated confidently that the archive contains no mention of quantum computing — a false negative rather than a graceful handling of a genuine gap. Their weight- and filter-based mechanisms appear to have pruned the tangential section out before generation ever saw it, where R0's plain lexical match and R6/R7/R8's broader retrieval both surfaced it. This indicates that aggressive weight filtering can produce confident, wrong answers, not only silent misses.</p>
+    </div>
+
+    <div class="finding">
+      <span class="tag">Retrieval gap</span>
+      <h4>F3 ("the intellectual spine") has a correct answer that no regime surfaced</h4>
+      <p>Every regime scored F3 between 2 and 16, the lowest ceiling of any question in the set. This is not a case of the archive lacking an answer — the archive states the answer explicitly elsewhere, in older material that predates the author's heavier use of highlighting. The likely cause is salience drift: colour usage intensified over the archive's history, so foundational passages written early carry systematically lower weight than later material saying less. Weight-based retrieval, which favours highlighted text, would underweight exactly this kind of case. This is a limitation of weight-driven retrieval on an archive whose highlighting habits are not stationary over time, not evidence that the content is missing.</p>
+    </div>
+
+    <div class="finding">
+      <span class="tag">Counter-example</span>
+      <h4>C1 is a case where more metadata produced a worse answer</h4>
+      <p>On C1 ("core philosophical influences"), R2/R4/R5 scored 59–61, noted as covering the essence but incomplete, while R6 (24) and R8 (17) scored far lower, noted as containing inaccuracies and material irrelevant to the question. R7 (70, full long-context stuffing) scored highest. This is kept as an explicit counter-example rather than smoothed into the aggregate: on this particular synthesis question, R6 and R8's broader, weight-fused retrieval pulled in material that measurably hurt the answer.</p>
+    </div>
+
+    <div class="finding">
+      <span class="tag">Possible false positive</span>
+      <h4>E2 may reward a lucky retrieval rather than a robust one</h4>
+      <p>On E2 ("greatest threat to civilization"), R2 (80) and R4 (80) score among the highest of any answer in the set, well above their typical performance elsewhere — R2 and R4 average 47 and 49 overall. The rating note on R2 reads "very clever synthesis," but the size of the gap relative to those regimes' usual behaviour is more consistent with a single highly relevant fragment being retrieved by chance than with a systematic capability. Included in the aggregate as rated, but not treated as representative of R2/R4's typical retrieval quality.</p>
+    </div>
+
+  </div>
+</section>
+
+<section id="context-volume">
+  <h2>Does more context simply mean a better answer?</h2>
+  <p style="margin-bottom:14px">Not on its own. Fragment counts across the nine regimes cluster into three discrete bands rather than varying continuously — 12 (R0–R5's fixed pool), roughly 18–60 (R6/R8's expansion and pooling), and roughly 230 (R7's long-context stuffing) — so the three bands are compared directly rather than fitting a trend line across a gap with no actual samples in it (figure: <code style="background:var(--surface-2);padding:1px 5px;border-radius:3px">results/figures/fig5_context_volume_vs_quality.png</code>, n=243). Median quality rises from the 12-fragment band (~48) to the 18–60 band (~70), but does <em>not</em> rise further at ~230 fragments (~70, statistically indistinguishable from the middle band) — and the ~230-fragment band's own spread is wide, from 14 to 80. R6 and R8 reach the same quality as R7 with a fifth to a quarter of the fragment count, by choosing which fragments rather than how many. This is consistent with the C1 counter-example above, where added volume actively hurt one answer, and argues against "just retrieve more" as a substitute for weighted, structured retrieval.</p>
+</section>
+
+<section id="questions">
+  <h2>Every question, every regime</h2>
+  <p style="margin-bottom:16px">Full regime names are given in the chart above; this table uses the short codes for space. Six questions from the original 34-question set (C7, F2, F4, X1, X3, X4) were dropped before or during rating to keep the workload manageable; C5 was generated but not rated.</p>
+  <div class="heatwrap"><table class="qtable" id="qtable"></table></div>
+</section>
+
+<section id="notes">
+  <h2>Representative rating notes — lowest and highest scored</h2>
+  <div class="notegrid" id="notegrid"></div>
+</section>
+
+<footer>
+  <p>Generated from <code>results/eval.db</code> — 243 blind ratings across 27 questions × 9 regimes. Statistical tables (paired t-test, 95% CI, correctness/completeness/grounding breakdown where recorded) in <code>results/table.csv</code>; print-ready figures in <code>results/figures/</code>; full methodology in <code>evaluation/questions.py</code> and <code>settings.py</code>. Dropped from the original 34-question set: C7, F2, F4, X1, X3, X4 (trimmed for rating time; X4's premise — that orange highlighting reliably marks "needs revision" — did not hold consistently across the archive). C5 was generated but never rated.</p>
+</footer>
+
+</div>
+
+<script>
+const DATA = {"regime_stats": [{"regime": "R0_baseline_fts", "label": "R0 \u00b7 Keyword baseline", "short": "R0", "n": 27, "mean": 19.9, "lo": 11.2, "hi": 28.5, "min": 0, "max": 75}, {"regime": "R1_baseline_vector", "label": "R1 \u00b7 Dense vector baseline", "short": "R1", "n": 27, "mean": 40.0, "lo": 30.5, "hi": 49.6, "min": 0, "max": 78}, {"regime": "R2_weight_boost", "label": "R2 \u00b7 + colour-weight ranking", "short": "R2", "n": 27, "mean": 47.4, "lo": 38.3, "hi": 56.4, "min": 3, "max": 80}, {"regime": "R3_context_embed", "label": "R3 \u00b7 + tree-path embedding", "short": "R3", "n": 27, "mean": 47.9, "lo": 38.8, "hi": 56.9, "min": 0, "max": 77}, {"regime": "R4_weight_filter", "label": "R4 \u00b7 + highlighted-only pool", "short": "R4", "n": 27, "mean": 49.1, "lo": 40.1, "hi": 58.1, "min": 0, "max": 80}, {"regime": "R5_prompt_meta", "label": "R5 \u00b7 + metadata in prompt", "short": "R5", "n": 27, "mean": 56.1, "lo": 48.0, "hi": 64.2, "min": 0, "max": 82}, {"regime": "R6_full_metadata", "label": "R6 \u00b7 Full metadata fusion", "short": "R6", "n": 27, "mean": 57.1, "lo": 47.6, "hi": 66.5, "min": 7, "max": 86}, {"regime": "R7_long_context", "label": "R7 \u00b7 Long-context control", "short": "R7", "n": 27, "mean": 58.3, "lo": 50.5, "hi": 66.2, "min": 14, "max": 80}, {"regime": "R8_pooled_curated", "label": "R8 \u00b7 Pooled keyword+vector", "short": "R8", "n": 27, "mean": 59.7, "lo": 50.2, "hi": 69.2, "min": 6, "max": 80}], "labels": {"R0_baseline_fts": "R0 \u00b7 Keyword baseline", "R1_baseline_vector": "R1 \u00b7 Dense vector baseline", "R2_weight_boost": "R2 \u00b7 + colour-weight ranking", "R3_context_embed": "R3 \u00b7 + tree-path embedding", "R4_weight_filter": "R4 \u00b7 + highlighted-only pool", "R5_prompt_meta": "R5 \u00b7 + metadata in prompt", "R6_full_metadata": "R6 \u00b7 Full metadata fusion", "R7_long_context": "R7 \u00b7 Long-context control", "R8_pooled_curated": "R8 \u00b7 Pooled keyword+vector"}, "short": {"R0_baseline_fts": "R0", "R1_baseline_vector": "R1", "R2_weight_boost": "R2", "R3_context_embed": "R3", "R4_weight_filter": "R4", "R5_prompt_meta": "R5", "R6_full_metadata": "R6", "R7_long_context": "R7", "R8_pooled_curated": "R8"}, "regimes": ["R0_baseline_fts", "R1_baseline_vector", "R2_weight_boost", "R3_context_embed", "R4_weight_filter", "R5_prompt_meta", "R6_full_metadata", "R7_long_context", "R8_pooled_curated"], "group_table": {"A": {"R0_baseline_fts": 40.8, "R1_baseline_vector": 43.8, "R2_weight_boost": 55.2, "R3_context_embed": 56, "R4_weight_filter": 54.5, "R5_prompt_meta": 59.2, "R6_full_metadata": 65.5, "R7_long_context": 71.5, "R8_pooled_curated": 77.2}, "B": {"R0_baseline_fts": 23.8, "R1_baseline_vector": 47, "R2_weight_boost": 52.5, "R3_context_embed": 50.5, "R4_weight_filter": 46.7, "R5_prompt_meta": 61.5, "R6_full_metadata": 66.7, "R7_long_context": 51, "R8_pooled_curated": 67.3}, "C": {"R0_baseline_fts": 17.2, "R1_baseline_vector": 47, "R2_weight_boost": 66.6, "R3_context_embed": 51.2, "R4_weight_filter": 65.6, "R5_prompt_meta": 66, "R6_full_metadata": 64.2, "R7_long_context": 70.6, "R8_pooled_curated": 61.4}, "D": {"R0_baseline_fts": 6, "R1_baseline_vector": 59.3, "R2_weight_boost": 26.7, "R3_context_embed": 53.7, "R4_weight_filter": 38, "R5_prompt_meta": 50.3, "R6_full_metadata": 56.7, "R7_long_context": 60.3, "R8_pooled_curated": 40}, "E": {"R0_baseline_fts": 5, "R1_baseline_vector": 17.3, "R2_weight_boost": 53.3, "R3_context_embed": 37.7, "R4_weight_filter": 73.3, "R5_prompt_meta": 71.3, "R6_full_metadata": 55.3, "R7_long_context": 57, "R8_pooled_curated": 69.3}, "F": {"R0_baseline_fts": 8.7, "R1_baseline_vector": 15.3, "R2_weight_boost": 19, "R3_context_embed": 33.7, "R4_weight_filter": 18.7, "R5_prompt_meta": 32, "R6_full_metadata": 28, "R7_long_context": 37.3, "R8_pooled_curated": 33.3}, "X": {"R0_baseline_fts": 4, "R1_baseline_vector": 25, "R2_weight_boost": 3, "R3_context_embed": 23, "R4_weight_filter": 0, "R5_prompt_meta": 0, "R6_full_metadata": 7, "R7_long_context": 23, "R8_pooled_curated": 9}}, "group_names": {"A": "Factual / definitional", "B": "Structural / hierarchical", "C": "Synthesis", "D": "Contrastive", "E": "Inferential", "F": "Implicit / distributed", "X": "Stress / edge"}, "group_n": {"A": 6, "B": 6, "C": 5, "D": 3, "E": 3, "F": 3, "X": 1}, "question_table": [{"id": "A1", "group": "A", "q": "What is Aetherialism?", "scores": {"R0_baseline_fts": 0, "R1_baseline_vector": 0, "R2_weight_boost": 42, "R3_context_embed": 10, "R4_weight_filter": 38, "R5_prompt_meta": 42, "R6_full_metadata": 50, "R7_long_context": 74, "R8_pooled_curated": 79}}, {"id": "A2", "group": "A", "q": "Define the Elevation of Life as used in Aetherian doctrine.", "scores": {"R0_baseline_fts": 45, "R1_baseline_vector": 33, "R2_weight_boost": 55, "R3_context_embed": 34, "R4_weight_filter": 45, "R5_prompt_meta": 27, "R6_full_metadata": 86, "R7_long_context": 74, "R8_pooled_curated": 80}}, {"id": "A3", "group": "A", "q": "What is the Ecclesia Militans?", "scores": {"R0_baseline_fts": 63, "R1_baseline_vector": 63, "R2_weight_boost": 68, "R3_context_embed": 72, "R4_weight_filter": 63, "R5_prompt_meta": 72, "R6_full_metadata": 21, "R7_long_context": 45, "R8_pooled_curated": 70}}, {"id": "A4", "group": "A", "q": "What is the Cultus Civium Aeternum?", "scores": {"R0_baseline_fts": 33, "R1_baseline_vector": 78, "R2_weight_boost": 76, "R3_context_embed": 77, "R4_weight_filter": 76, "R5_prompt_meta": 74, "R6_full_metadata": 76, "R7_long_context": 77, "R8_pooled_curated": 77}}, {"id": "A5", "group": "A", "q": "What is the Aetherian concept of Heaven?", "scores": {"R0_baseline_fts": 29, "R1_baseline_vector": 15, "R2_weight_boost": 15, "R3_context_embed": 72, "R4_weight_filter": 29, "R5_prompt_meta": 70, "R6_full_metadata": 80, "R7_long_context": 79, "R8_pooled_curated": 78}}, {"id": "A6", "group": "A", "q": "What is Aetheriocracy?", "scores": {"R0_baseline_fts": 75, "R1_baseline_vector": 74, "R2_weight_boost": 75, "R3_context_embed": 71, "R4_weight_filter": 76, "R5_prompt_meta": 70, "R6_full_metadata": 80, "R7_long_context": 80, "R8_pooled_curated": 79}}, {"id": "B1", "group": "B", "q": "How is the belief system architecturally organized? What are its main layers or domains?", "scores": {"R0_baseline_fts": 36, "R1_baseline_vector": 18, "R2_weight_boost": 59, "R3_context_embed": 37, "R4_weight_filter": 43, "R5_prompt_meta": 45, "R6_full_metadata": 58, "R7_long_context": 70, "R8_pooled_curated": 73}}, {"id": "B2", "group": "B", "q": "What is the relationship between Eternal Law, Natural Law, Human Law, and Aetherian Law?", "scores": {"R0_baseline_fts": 52, "R1_baseline_vector": 77, "R2_weight_boost": 60, "R3_context_embed": 25, "R4_weight_filter": 63, "R5_prompt_meta": 69, "R6_full_metadata": 52, "R7_long_context": 14, "R8_pooled_curated": 47}}, {"id": "B3", "group": "B", "q": "What is the hierarchy of authority in the governance system?", "scores": {"R0_baseline_fts": 0, "R1_baseline_vector": 21, "R2_weight_boost": 54, "R3_context_embed": 70, "R4_weight_filter": 61, "R5_prompt_meta": 66, "R6_full_metadata": 72, "R7_long_context": 63, "R8_pooled_curated": 63}}, {"id": "B4", "group": "B", "q": "How does the Scalae Naturae (chain of being) connect to the system of governance?", "scores": {"R0_baseline_fts": 6, "R1_baseline_vector": 36, "R2_weight_boost": 45, "R3_context_embed": 74, "R4_weight_filter": 18, "R5_prompt_meta": 66, "R6_full_metadata": 63, "R7_long_context": 52, "R8_pooled_curated": 78}}, {"id": "B5", "group": "B", "q": "What is the relationship between the belief system and the State in Aetheriocracy?", "scores": {"R0_baseline_fts": 0, "R1_baseline_vector": 63, "R2_weight_boost": 66, "R3_context_embed": 50, "R4_weight_filter": 62, "R5_prompt_meta": 77, "R6_full_metadata": 78, "R7_long_context": 73, "R8_pooled_curated": 68}}, {"id": "B6", "group": "B", "q": "How do the 10 levels of integration into the system relate to the nobility structure?", "scores": {"R0_baseline_fts": 49, "R1_baseline_vector": 67, "R2_weight_boost": 31, "R3_context_embed": 47, "R4_weight_filter": 33, "R5_prompt_meta": 46, "R6_full_metadata": 77, "R7_long_context": 34, "R8_pooled_curated": 75}}, {"id": "C1", "group": "C", "q": "What are the core philosophical influences on Aetherialism, and how are they synthesized?", "scores": {"R0_baseline_fts": 0, "R1_baseline_vector": 23, "R2_weight_boost": 61, "R3_context_embed": 9, "R4_weight_filter": 59, "R5_prompt_meta": 59, "R6_full_metadata": 24, "R7_long_context": 70, "R8_pooled_curated": 17}}, {"id": "C2", "group": "C", "q": "How does Aetherialism justify hierarchy \u2014 philosophically, spiritually, and institutionally?", "scores": {"R0_baseline_fts": 4, "R1_baseline_vector": 37, "R2_weight_boost": 67, "R3_context_embed": 68, "R4_weight_filter": 67, "R5_prompt_meta": 64, "R6_full_metadata": 75, "R7_long_context": 71, "R8_pooled_curated": 75}}, {"id": "C3", "group": "C", "q": "What does Aetherialism consider the highest expression of human potential, and how is it developed?", "scores": {"R0_baseline_fts": 54, "R1_baseline_vector": 63, "R2_weight_boost": 62, "R3_context_embed": 54, "R4_weight_filter": 63, "R5_prompt_meta": 64, "R6_full_metadata": 74, "R7_long_context": 72, "R8_pooled_curated": 69}}, {"id": "C4", "group": "C", "q": "How does the concept of struggle function across the metaphysical, personal, and civilizational levels?", "scores": {"R0_baseline_fts": 12, "R1_baseline_vector": 43, "R2_weight_boost": 75, "R3_context_embed": 61, "R4_weight_filter": 74, "R5_prompt_meta": 75, "R6_full_metadata": 78, "R7_long_context": 73, "R8_pooled_curated": 77}}, {"id": "C6", "group": "C", "q": "How does the theory of history inform its civilizational goals?", "scores": {"R0_baseline_fts": 16, "R1_baseline_vector": 69, "R2_weight_boost": 68, "R3_context_embed": 64, "R4_weight_filter": 65, "R5_prompt_meta": 68, "R6_full_metadata": 70, "R7_long_context": 67, "R8_pooled_curated": 69}}, {"id": "D1", "group": "D", "q": "How does the Aetherian concept of freedom differ from other conceptions of freedom?", "scores": {"R0_baseline_fts": 18, "R1_baseline_vector": 62, "R2_weight_boost": 26, "R3_context_embed": 62, "R4_weight_filter": 30, "R5_prompt_meta": 64, "R6_full_metadata": 65, "R7_long_context": 65, "R8_pooled_curated": 47}}, {"id": "D2", "group": "D", "q": "How does the Aetherian view of natural law compare to the Thomistic view?", "scores": {"R0_baseline_fts": 0, "R1_baseline_vector": 64, "R2_weight_boost": 16, "R3_context_embed": 65, "R4_weight_filter": 17, "R5_prompt_meta": 17, "R6_full_metadata": 30, "R7_long_context": 43, "R8_pooled_curated": 6}}, {"id": "D3", "group": "D", "q": "How does the view of struggle compare to Nietzsche's will to power?", "scores": {"R0_baseline_fts": 0, "R1_baseline_vector": 52, "R2_weight_boost": 38, "R3_context_embed": 34, "R4_weight_filter": 67, "R5_prompt_meta": 70, "R6_full_metadata": 75, "R7_long_context": 73, "R8_pooled_curated": 67}}, {"id": "E1", "group": "E", "q": "According to Aetherian Law, what makes a human law invalid or illegitimate?", "scores": {"R0_baseline_fts": 0, "R1_baseline_vector": 8, "R2_weight_boost": 14, "R3_context_embed": 55, "R4_weight_filter": 68, "R5_prompt_meta": 68, "R6_full_metadata": 70, "R7_long_context": 72, "R8_pooled_curated": 70}}, {"id": "E2", "group": "E", "q": "What would this system consider the greatest threat to civilization, and why?", "scores": {"R0_baseline_fts": 5, "R1_baseline_vector": 0, "R2_weight_boost": 80, "R3_context_embed": 0, "R4_weight_filter": 80, "R5_prompt_meta": 82, "R6_full_metadata": 68, "R7_long_context": 66, "R8_pooled_curated": 67}}, {"id": "E3", "group": "E", "q": "Based on the doctrine, how should a community respond to a member who consistently avoids struggle and seeks comfort?", "scores": {"R0_baseline_fts": 10, "R1_baseline_vector": 44, "R2_weight_boost": 66, "R3_context_embed": 58, "R4_weight_filter": 72, "R5_prompt_meta": 64, "R6_full_metadata": 28, "R7_long_context": 33, "R8_pooled_curated": 71}}, {"id": "F1", "group": "F", "q": "What are the Four Laws of Life, and how does each manifest at the individual, community, and civilizational level?", "scores": {"R0_baseline_fts": 24, "R1_baseline_vector": 30, "R2_weight_boost": 12, "R3_context_embed": 71, "R4_weight_filter": 9, "R5_prompt_meta": 33, "R6_full_metadata": 64, "R7_long_context": 26, "R8_pooled_curated": 78}}, {"id": "F3", "group": "F", "q": "What is the intellectual spine or backbone from which this system is derived?", "scores": {"R0_baseline_fts": 2, "R1_baseline_vector": 10, "R2_weight_boost": 9, "R3_context_embed": 7, "R4_weight_filter": 9, "R5_prompt_meta": 11, "R6_full_metadata": 12, "R7_long_context": 16, "R8_pooled_curated": 9}}, {"id": "F5", "group": "F", "q": "Which doctrines does the archive name but leave only partially worked out?", "scores": {"R0_baseline_fts": 0, "R1_baseline_vector": 6, "R2_weight_boost": 36, "R3_context_embed": 23, "R4_weight_filter": 38, "R5_prompt_meta": 52, "R6_full_metadata": 8, "R7_long_context": 70, "R8_pooled_curated": 13}}, {"id": "X2", "group": "X", "q": "What does the archive say about quantum computing?", "scores": {"R0_baseline_fts": 4, "R1_baseline_vector": 25, "R2_weight_boost": 3, "R3_context_embed": 23, "R4_weight_filter": 0, "R5_prompt_meta": 0, "R6_full_metadata": 7, "R7_long_context": 23, "R8_pooled_curated": 9}}], "notes": [{"q": "A1", "regime": "R4_weight_filter", "overall": 38, "note": "Covers some of the essential but has some missing data, and woo-woo language/formulations"}, {"q": "A1", "regime": "R7_long_context", "overall": 74, "note": "Overall it covers the most important points, but it has some woo-woo language, and the emphasis on the essential could be better"}, {"q": "A1", "regime": "R8_pooled_curated", "overall": 79, "note": "It covers the most important points, and has a better emphasis on the essential"}, {"q": "A2", "regime": "R0_baseline_fts", "overall": 45, "note": "Good start, but a weak finish"}, {"q": "A2", "regime": "R1_baseline_vector", "overall": 33, "note": "It answers some aspects but is incomplete."}, {"q": "A2", "regime": "R2_weight_boost", "overall": 55, "note": "Good start, but a weak finish"}, {"q": "A2", "regime": "R3_context_embed", "overall": 34, "note": "weaker end as it lacks enough context"}, {"q": "A2", "regime": "R6_full_metadata", "overall": 86, "note": "A very well rounded answer"}, {"q": "A3", "regime": "R3_context_embed", "overall": 72, "note": "Well rounded answer with the etymology, but weaker ending"}, {"q": "A3", "regime": "R5_prompt_meta", "overall": 72, "note": "Well rounded contextualizing answer"}, {"q": "A3", "regime": "R6_full_metadata", "overall": 21, "note": "It lacks the required fragments to best answer this question, although it gives the best answer it can with what it has"}, {"q": "A3", "regime": "R7_long_context", "overall": 45, "note": "It lacks the required fragments to best answer the question, but it gives an answer that is somewhat related to what was asked"}, {"q": "A4", "regime": "R0_baseline_fts", "overall": 33, "note": "Weak answer compared to the others"}, {"q": "A4", "regime": "R4_weight_filter", "overall": 76, "note": "A good well rounded answer"}, {"q": "A4", "regime": "R6_full_metadata", "overall": 76, "note": "Good answer but the overall style and order of the contents of the text could be better"}, {"q": "A4", "regime": "R7_long_context", "overall": 77, "note": "Although it doesn't have right context to answer the question head on, the answer is constructed in such a way that actually makes it quite accurate and surprisingly good, even though it didn't read the most relevant fragments directly."}, {"q": "A5", "regime": "R0_baseline_fts", "overall": 29, "note": "It answers the question but not head on and is incomplete"}, {"q": "A5", "regime": "R1_baseline_vector", "overall": 15, "note": "Didn't answer the question head on, and has inaccuracies"}, {"q": "A5", "regime": "R2_weight_boost", "overall": 15, "note": "It doesn't answer the question properly head on and is incomplete"}, {"q": "A5", "regime": "R3_context_embed", "overall": 72, "note": "It answers with some of the essence, however it lacks the completeness of some other answers"}, {"q": "A5", "regime": "R4_weight_filter", "overall": 29, "note": "It doesn't answer the question properly head on and is incomplete"}, {"q": "A5", "regime": "R5_prompt_meta", "overall": 70, "note": "Good answer, but it didn't answer with the essence"}, {"q": "A5", "regime": "R6_full_metadata", "overall": 80, "note": "Good well contextualizing answer"}, {"q": "A5", "regime": "R7_long_context", "overall": 79, "note": "Strong answer but lacks the central abstraction that Heaven is simply 'that which is highest' and is also used that way, rather then a 'cosmic' order, although it is not entirely wrong"}, {"q": "A5", "regime": "R8_pooled_curated", "overall": 78, "note": "Good answer, but in the end answers with some stuff that isn't directly relevant"}, {"q": "A6", "regime": "R0_baseline_fts", "overall": 75, "note": "It has some good elements but doesn't share enough specifics"}, {"q": "A6", "regime": "R1_baseline_vector", "overall": 74, "note": "Good answer with a good style, that answers with the essence, but it is incomplete"}, {"q": "A6", "regime": "R2_weight_boost", "overall": 75, "note": "Covers the structural principles, but the answer also has some content that is not fully relevant to the question"}, {"q": "A6", "regime": "R3_context_embed", "overall": 71, "note": "Good beginning, but inaccuracies in the end"}, {"q": "A6", "regime": "R4_weight_filter", "overall": 76, "note": "strong beginning, weaker ending"}, {"q": "A6", "regime": "R6_full_metadata", "overall": 80, "note": "strong answer but lacks the core governing principles"}, {"q": "A6", "regime": "R7_long_context", "overall": 80, "note": "Strong answer, but the answer also has some content that is not fully relevant to the question, especially in the end"}, {"q": "A6", "regime": "R8_pooled_curated", "overall": 79, "note": "Strong well rounded answer, but lacks the core governing principles"}, {"q": "B1", "regime": "R0_baseline_fts", "overall": 36, "note": "Doesn't provide the required specifics, because it probably doesn't have enough context"}, {"q": "B1", "regime": "R1_baseline_vector", "overall": 18, "note": "Doesn't provide the required specifics, because it probably doesn't have enough context"}, {"q": "B1", "regime": "R2_weight_boost", "overall": 59, "note": "Lacks some of the intellectual spine, and focuses more on other stuff"}, {"q": "B1", "regime": "R3_context_embed", "overall": 37, "note": "Doesn't provide the required specifics"}, {"q": "B1", "regime": "R4_weight_filter", "overall": 43, "note": "Some inaccuracies, the metaphysical and other parts come over as somewhat misleading"}, {"q": "B1", "regime": "R6_full_metadata", "overall": 58, "note": "Lacks some of the intellectual spine"}, {"q": "B1", "regime": "R7_long_context", "overall": 70, "note": "Good, however some minor inaccuracies and the emphasis is not on the essence"}, {"q": "B1", "regime": "R8_pooled_curated", "overall": 73, "note": "Adds some stuff that isn't relevant to the question"}, {"q": "B2", "regime": "R0_baseline_fts", "overall": 52, "note": "Not enough specifics"}, {"q": "B2", "regime": "R1_baseline_vector", "overall": 77, "note": "A more beautiful synthesis compared to the others"}, {"q": "B2", "regime": "R2_weight_boost", "overall": 60, "note": "lacks the specifics on natural law"}, {"q": "B2", "regime": "R3_context_embed", "overall": 25, "note": "adds some irrelevant stuff and has inaccuracies"}, {"q": "B2", "regime": "R4_weight_filter", "overall": 63, "note": "Doesn't have enough of the specifics"}, {"q": "B2", "regime": "R7_long_context", "overall": 14, "note": "It doesn't answer the question properly, not enough focus on law and just answers with not related stuff"}, {"q": "B2", "regime": "R8_pooled_curated", "overall": 47, "note": "It has more of the relevant fragments, but the whole sounds worst"}, {"q": "B3", "regime": "R0_baseline_fts", "overall": 0, "note": "Doesn't provide an answer to the question"}, {"q": "B3", "regime": "R1_baseline_vector", "overall": 21, "note": "Doesn't provide enough of the specifics, and doesn't answer the question directly"}, {"q": "B3", "regime": "R2_weight_boost", "overall": 54, "note": "Doesn't have enough on the hierarchy specifically"}, {"q": "B3", "regime": "R3_context_embed", "overall": 70, "note": "More practical and covers preceptorial authority unlike the others, but still lacks a lot of stuff"}, {"q": "B3", "regime": "R6_full_metadata", "overall": 72, "note": "too much focus or emphasis on the divine selection element which should have better been replaced by the practical and preceptorial"}, {"q": "B4", "regime": "R0_baseline_fts", "overall": 6, "note": "Not enough specifics and doesn't connect them"}, {"q": "B4", "regime": "R1_baseline_vector", "overall": 36, "note": "a weaker synthesis"}, {"q": "B4", "regime": "R2_weight_boost", "overall": 45, "note": "kind of leaves the question a bit and focusses on other stuff other than the question, and a weaker synthesis"}, {"q": "B4", "regime": "R3_context_embed", "overall": 74, "note": "good grounded synthesis"}, {"q": "B4", "regime": "R4_weight_filter", "overall": 18, "note": "Too much focus on the governance and not enough on the connection and doesn't incorporate the Scalae Naturae into the answer"}, {"q": "B4", "regime": "R6_full_metadata", "overall": 63, "note": "Should have focused a bit more directly on the question that was asked"}, {"q": "B4", "regime": "R7_long_context", "overall": 52, "note": "Doesn't incorporate the Scalae Naturae into the answer"}, {"q": "B4", "regime": "R8_pooled_curated", "overall": 78, "note": "good synthesis"}, {"q": "B5", "regime": "R0_baseline_fts", "overall": 0, "note": "Doesn't answer the question at all"}, {"q": "B5", "regime": "R1_baseline_vector", "overall": 63, "note": "weaker ending"}, {"q": "B5", "regime": "R6_full_metadata", "overall": 78, "note": "Also focuses on practical realities"}, {"q": "B5", "regime": "R7_long_context", "overall": 73, "note": "A good exposition of the relationship"}, {"q": "B6", "regime": "R0_baseline_fts", "overall": 49, "note": "in the end it is able to infer what the levels of integration are mostly"}, {"q": "B6", "regime": "R4_weight_filter", "overall": 33, "note": "not enough specifics"}, {"q": "B6", "regime": "R6_full_metadata", "overall": 77, "note": "Actually covers the levels of integration in practical terms and that different entities can be at different levels of integration"}, {"q": "B6", "regime": "R7_long_context", "overall": 34, "note": "It doesn't really answer the question"}, {"q": "C1", "regime": "R0_baseline_fts", "overall": 0, "note": "Doesn't answer the question at all"}, {"q": "C1", "regime": "R2_weight_boost", "overall": 61, "note": "Covers the essence, but is incomplete"}, {"q": "C1", "regime": "R4_weight_filter", "overall": 59, "note": "Covers the essence, but is incomplete"}, {"q": "C1", "regime": "R5_prompt_meta", "overall": 59, "note": "Covers the essence, but is incomplete"}, {"q": "C1", "regime": "R6_full_metadata", "overall": 24, "note": "Has some inaccuracies and part of the answer is completely irrelevant to the question, it has a good beginning but weak end"}, {"q": "C1", "regime": "R7_long_context", "overall": 70, "note": "Covers the essence, and is more complete then the others, but it also has lots of stuff that isn't really relevant directly to the question - again good beginning, but gets weaker towards the end"}, {"q": "C1", "regime": "R8_pooled_curated", "overall": 17, "note": "Doesn't answer the question at all, has lots of irrelevant stuff"}, {"q": "C2", "regime": "R0_baseline_fts", "overall": 4, "note": "Not enough specifics and relevant information"}, {"q": "C2", "regime": "R1_baseline_vector", "overall": 37, "note": "Not enough specifics, and some things are not fully relevant"}, {"q": "C2", "regime": "R3_context_embed", "overall": 68, "note": "The beginning is good, however the institutional is not covered enough, as it likely has not read the most relevant fragments"}, {"q": "C2", "regime": "R6_full_metadata", "overall": 75, "note": "Strong good sounding beginning"}, {"q": "C3", "regime": "R0_baseline_fts", "overall": 54, "note": "The how it is developed section is weakest"}, {"q": "C3", "regime": "R1_baseline_vector", "overall": 63, "note": "How it is developed section is weaker"}, {"q": "C3", "regime": "R2_weight_boost", "overall": 62, "note": "How it is developed section is weaker"}, {"q": "C3", "regime": "R3_context_embed", "overall": 54, "note": "How it is developed section is weaker\nBut has an interesting beginning, however it doesn't answer the question directly"}, {"q": "C3", "regime": "R4_weight_filter", "overall": 63, "note": "How it is developed section is weaker"}, {"q": "C3", "regime": "R5_prompt_meta", "overall": 64, "note": "How it is developed section is weaker"}, {"q": "C3", "regime": "R6_full_metadata", "overall": 74, "note": "Answers the question best compared to the others"}, {"q": "C3", "regime": "R7_long_context", "overall": 72, "note": "It answers the question but also has lots of irrelevant stuff"}, {"q": "C3", "regime": "R8_pooled_curated", "overall": 69, "note": "Covers the how it is developed why others don't do it"}, {"q": "C4", "regime": "R0_baseline_fts", "overall": 12, "note": "Not enough specifics and doesn't answer the question directly"}, {"q": "C4", "regime": "R1_baseline_vector", "overall": 43, "note": "Weaker compared to some of the others"}, {"q": "C4", "regime": "R3_context_embed", "overall": 61, "note": "Has some inaccuracies"}, {"q": "C4", "regime": "R6_full_metadata", "overall": 78, "note": "Has a good beginning, but towards the end stuff that is irrelevant"}, {"q": "C4", "regime": "R7_long_context", "overall": 73, "note": "Has some irrelevant stuff, and some minor inaccuracies"}, {"q": "C4", "regime": "R8_pooled_curated", "overall": 77, "note": "Has some minor irrelevant stuff"}, {"q": "C6", "regime": "R0_baseline_fts", "overall": 16, "note": "Has lots of irrelevant stuff"}, {"q": "C6", "regime": "R5_prompt_meta", "overall": 68, "note": "Lacks the specifics on the theory of history"}, {"q": "C6", "regime": "R7_long_context", "overall": 67, "note": "It also has lots of stuff irrelevant to the question"}, {"q": "D1", "regime": "R0_baseline_fts", "overall": 18, "note": "It has lots of irrelevant stuff and doesn't really answer the question properly"}, {"q": "D1", "regime": "R1_baseline_vector", "overall": 62, "note": "good beginnings, but has irrelevant segments"}, {"q": "D1", "regime": "R2_weight_boost", "overall": 26, "note": "Has lots of irrelevant stuff about governance"}, {"q": "D1", "regime": "R4_weight_filter", "overall": 30, "note": "It has irrelevant stuff"}, {"q": "D1", "regime": "R7_long_context", "overall": 65, "note": "Has some irrelevant stuff"}, {"q": "D1", "regime": "R8_pooled_curated", "overall": 47, "note": "Has some irrelevant stuff"}, {"q": "D2", "regime": "R1_baseline_vector", "overall": 64, "note": "Actually answers the question"}, {"q": "D2", "regime": "R2_weight_boost", "overall": 16, "note": "Again doesn't answer the question and gives lots of irrelevant stuff"}, {"q": "D2", "regime": "R4_weight_filter", "overall": 17, "note": "Doesn't really answer the question"}, {"q": "D2", "regime": "R5_prompt_meta", "overall": 17, "note": "Has lots of irrelevant stuff, and doesn't really answer the question"}, {"q": "D2", "regime": "R6_full_metadata", "overall": 30, "note": "Doesn't really answer the question"}, {"q": "D2", "regime": "R8_pooled_curated", "overall": 6, "note": "Answers with irrelevant stuff"}, {"q": "D3", "regime": "R1_baseline_vector", "overall": 52, "note": "Inaccuracies in the end"}, {"q": "D3", "regime": "R3_context_embed", "overall": 34, "note": "Answers the question but not fully accurate"}, {"q": "D3", "regime": "R6_full_metadata", "overall": 75, "note": "Good well rounded answer"}, {"q": "D3", "regime": "R7_long_context", "overall": 73, "note": "Some weaker parts, but overall a good comparison"}, {"q": "E1", "regime": "R3_context_embed", "overall": 55, "note": "not enough specifics"}, {"q": "E1", "regime": "R6_full_metadata", "overall": 70, "note": "Has some irrelevant stuff"}, {"q": "E2", "regime": "R2_weight_boost", "overall": 80, "note": "Very clever synthesis"}, {"q": "E2", "regime": "R6_full_metadata", "overall": 68, "note": "Not wrong, but covers threats not the greatest threat specifically"}, {"q": "E2", "regime": "R7_long_context", "overall": 66, "note": "Not wrong, but covers threats not the greatest threat specifically\nIt has part of the answer within it, but buried around irrelevant stuff"}, {"q": "E2", "regime": "R8_pooled_curated", "overall": 67, "note": "Not wrong, but covers threats not the greatest threat specifically"}, {"q": "E3", "regime": "R5_prompt_meta", "overall": 64, "note": "Not practical enough suggestions"}, {"q": "E3", "regime": "R6_full_metadata", "overall": 28, "note": "Doesn't answer the question directly, and has some irrelevant stuff"}, {"q": "E3", "regime": "R7_long_context", "overall": 33, "note": "Doesn't really answer the question directly, and has lots of partially inaccurate stuff or irrelevant stuff"}, {"q": "F1", "regime": "R1_baseline_vector", "overall": 30, "note": "Answers with the essence but not how they manifest at each level"}, {"q": "F1", "regime": "R6_full_metadata", "overall": 64, "note": "Relatively good answer, however doesn't name the exact laws"}, {"q": "F1", "regime": "R7_long_context", "overall": 26, "note": "Answers with somewhat irrelevant stuff"}], "n_questions": 27, "n_ratings": 243};
+
+function seqColor(v /* 0-100 */){
+  const steps = ['seq-100','seq-150','seq-200','seq-250','seq-300','seq-350','seq-400','seq-450','seq-500','seq-550','seq-600','seq-650'];
+  const idx = Math.max(0, Math.min(steps.length-1, Math.round((v/100) * (steps.length-1))));
+  return `var(--${steps[idx]})`;
+}
+function textOn(v){ return v/100 > 0.55 ? '#fff' : 'var(--ink)'; }
+
+// tiles
+const rs = DATA.regime_stats;
+const r0 = rs[0].mean, r8 = rs[rs.length-1].mean;
+document.getElementById('tiles').innerHTML = [
+  [DATA.n_questions, 'Questions rated'],
+  [DATA.n_ratings, 'Blind ratings'],
+  [r0.toFixed(1), 'R0 baseline mean'],
+  ['+' + (r8-r0).toFixed(1), 'R0 → R8 lift'],
+].map(([v,l])=>`<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+
+// bar chart
+document.getElementById('bars').innerHTML = rs.map((r,i)=>{
+  const color = seqColor((i/(rs.length-1))*100);
+  const ciLoPct = Math.max(0,r.lo), ciHiPct = Math.min(100,r.hi);
+  return `<div class="bar-row">
+    <div class="rlabel">${r.label}</div>
+    <div class="bar-track">
+      <div class="bar-fill" style="width:${r.mean}%;background:${color}"></div>
+      <div class="bar-ci" style="left:${ciLoPct}%"></div>
+      <div class="bar-ci" style="left:${ciHiPct}%"></div>
+    </div>
+    <div class="rval"><b>${r.mean}</b> [${r.lo}, ${r.hi}]</div>
+  </div>`;
+}).join('');
+
+// heatmap
+const groupOrder = ['A','B','C','D','E','F','X'];
+let thead = '<thead><tr><th class="rowhead">Group</th>' + DATA.regimes.map(r=>`<th>${r.replace('_',' ').split(' ')[0]}</th>`).join('') + '</tr></thead>';
+let tbody = '<tbody>';
+groupOrder.forEach(g=>{
+  const row = DATA.group_table[g]; if(!row) return;
+  tbody += `<tr><th>${g} — ${DATA.group_names[g]}</th>`;
+  DATA.regimes.forEach(r=>{
+    const v = row[r];
+    if(v===undefined){ tbody += '<td>—</td>'; return; }
+    tbody += `<td style="background:${seqColor(v)};color:${textOn(v)}">${v}</td>`;
+  });
+  tbody += '</tr>';
+});
+tbody += '</tbody>';
+document.getElementById('heatmap').innerHTML = thead + tbody;
+
+// per-question table
+let qthead = '<thead><tr><th>ID</th><th>Question</th>' + DATA.regimes.map(r=>`<th>${r.replace('_',' ').split(' ')[0]}</th>`).join('') + '</tr></thead>';
+let qtbody = '<tbody>';
+let lastGroup = null;
+DATA.question_table.forEach(q=>{
+  const newGroup = q.group !== lastGroup;
+  lastGroup = q.group;
+  qtbody += `<tr${newGroup?' class="group-divider"':''}><td class="qid">${q.id}</td><td class="qtext">${q.q}</td>`;
+  DATA.regimes.forEach(r=>{
+    const v = q.scores[r];
+    if(v===undefined){ qtbody += '<td class="num">—</td>'; return; }
+    qtbody += `<td class="num" style="background:${seqColor(v)};color:${textOn(v)}">${v}</td>`;
+  });
+  qtbody += '</tr>';
+});
+qtbody += '</tbody>';
+document.getElementById('qtable').innerHTML = qthead + qtbody;
+
+// notes — lowest and highest
+const sorted = [...DATA.notes].sort((a,b)=>a.overall-b.overall);
+const lowest = sorted.slice(0,4);
+const highest = sorted.slice(-4).reverse();
+function noteCard(n){
+  const cls = n.overall>=60?'score-good':(n.overall<=20?'score-bad':'');
+  return `<div class="notecard">
+    <div class="meta"><span class="qid">${n.q} · ${DATA.labels[n.regime]||n.regime}</span><span class="score ${cls}">${n.overall}</span></div>
+    <blockquote>"${n.note.replace(/</g,'&lt;')}"</blockquote>
+  </div>`;
+}
+document.getElementById('notegrid').innerHTML =
+  lowest.map(noteCard).join('') + highest.map(noteCard).join('');
+</script>

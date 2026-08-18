@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RightNote Archive Explorer</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #ffffff;
+  --bg-panel: #f3f3f3;
+  --bg-hover: #e4eaf2;
+  --bg-active: #ccdaed;
+  --border: #c8c8c8;
+  --border-light: #e0e0e0;
+  --text: #1a1a1a;
+  --text-dim: #777;
+  --accent: #2b5797;
+  --hl-purple: #CC99FF;
+  --hl-pink: #FF99CC;
+  --hl-blue: #CCFFFF;
+  --hl-green: #CCFFCC;
+  --hl-yellow: #FFFF99;
+  --hl-orange: #FFCC99;
+  --sidebar-w: 300px;
+  --topbar-h: 30px;
+  --font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+html, body { height: 100%; overflow: hidden; }
+body { font-family: var(--font); font-size: 13px; color: var(--text); background: var(--bg); display: flex; flex-direction: column; }
+
+/* ── Top Bar ──────────────── */
+#topbar { height: var(--topbar-h); background: var(--bg-panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 6px; gap: 4px; flex-shrink: 0; }
+.tb-title { font-weight: 600; font-size: 12px; color: var(--accent); margin-right: 6px; }
+.tb-sep { width: 1px; height: 16px; background: var(--border); margin: 0 3px; }
+#search-box { background: #fff; border: 1px solid var(--border); color: var(--text); padding: 2px 7px; border-radius: 2px; width: 190px; font-size: 11px; outline: none; }
+#search-box:focus { border-color: var(--accent); }
+.tb-btn { background: none; border: 1px solid var(--border-light); color: var(--text-dim); padding: 1px 7px; border-radius: 2px; cursor: pointer; font-size: 11px; }
+.tb-btn:hover { background: var(--bg-hover); color: var(--text); }
+.tb-spacer { flex: 1; }
+#save-ind { font-size: 10px; color: var(--text-dim); margin-right: 4px; }
+
+/* ── Main ─────────────────── */
+#main { display: flex; flex: 1; min-height: 0; }
+
+/* ── Sidebar ──────────────── */
+#sidebar { width: var(--sidebar-w); min-width: 150px; max-width: 50vw; background: var(--bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+#page-hdr { display: flex; align-items: center; padding: 2px 5px; border-bottom: 1px solid var(--border-light); background: var(--bg-panel); cursor: pointer; user-select: none; font-size: 11px; color: var(--text-dim); gap: 3px; }
+#page-hdr:hover { background: var(--bg-hover); }
+#pg-tog { font-size: 8px; transition: transform 0.15s; }
+#pg-tog.open { transform: rotate(90deg); }
+#page-tabs { display: none; flex-wrap: wrap; gap: 1px; padding: 2px 3px; border-bottom: 1px solid var(--border-light); background: var(--bg-panel); }
+#page-tabs.open { display: flex; }
+.ptab { padding: 1px 5px; border-radius: 2px; cursor: pointer; font-size: 11px; color: var(--text-dim); border: 1px solid transparent; }
+.ptab:hover { background: var(--bg-hover); color: var(--text); }
+.ptab.active { background: var(--accent); color: #fff; }
+.ptab .cnt { font-size: 9px; opacity: 0.7; margin-left: 2px; }
+#tree-box { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 1px 0; }
+#tree-box::-webkit-scrollbar { width: 7px; }
+#tree-box::-webkit-scrollbar-track { background: #f5f5f5; }
+#tree-box::-webkit-scrollbar-thumb { background: #c0c0c0; border-radius: 3px; }
+
+/* ── Tree Nodes ───────────── */
+.tn { display: flex; align-items: center; padding: 0 3px 0 0; cursor: pointer; min-height: 19px; user-select: none; font-size: 12px; line-height: 1.2; position: relative; }
+.tn:hover { background: var(--bg-hover); }
+.tn.active { background: var(--bg-active); }
+.tn-t { width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #aaa; font-size: 7px; cursor: pointer; }
+.tn-t.exp { transform: rotate(90deg); }
+.tn-t.no { visibility: hidden; }
+.tn-cap { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; border-radius: 2px; }
+.bg-on .tn-cap[data-bg="p"] { background: var(--hl-pink); }
+.bg-on .tn-cap[data-bg="b"] { background: var(--hl-blue); }
+.bg-on .tn-cap[data-bg="g"] { background: var(--hl-green); }
+.bg-on .tn-cap[data-bg="y"] { background: var(--hl-yellow); }
+.bg-on .tn-cap[data-bg="o"] { background: var(--hl-orange); }
+.bg-on .tn-cap[data-bg="u"] { background: var(--hl-purple); }
+.tn-cc { font-size: 9px; color: #bbb; margin-left: 2px; flex-shrink: 0; }
+.tc { display: none; }
+.tc.open { display: block; }
+
+/* Drag and drop indicators */
+.tn.drag-over-above { border-top: 2px solid var(--accent); }
+.tn.drag-over-below { border-bottom: 2px solid var(--accent); }
+.tn.drag-over-into { background: #d0e0f8; outline: 1px solid var(--accent); }
+.tn.dragging { opacity: 0.4; }
+
+/* ── Tooltip ──────────────── */
+#tooltip {
+  display: none; position: fixed; background: #333; color: #fff; padding: 4px 8px;
+  border-radius: 3px; font-size: 11px; max-width: 500px; word-break: break-word;
+  z-index: 300; pointer-events: none; white-space: normal; line-height: 1.3;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+#tooltip.vis { display: block; }
+
+/* ── Resize ───────────────── */
+#rh { width: 3px; cursor: col-resize; flex-shrink: 0; }
+#rh:hover, #rh.drag { background: var(--accent); opacity: 0.3; }
+
+/* ── Content Panel ────────── */
+#cpanel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#bc { padding: 2px 10px; font-size: 11px; color: var(--text-dim); border-bottom: 1px solid var(--border-light); background: var(--bg-panel); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; min-height: 20px; }
+#bc span { cursor: pointer; }
+#bc span:hover { color: var(--accent); text-decoration: underline; }
+#bc .sep { margin: 0 2px; opacity: 0.4; }
+#meta { display: none; padding: 2px 10px; font-size: 10px; color: var(--text-dim); border-bottom: 1px solid var(--border-light); background: #fafafa; flex-shrink: 0; gap: 10px; }
+#meta.vis { display: flex; flex-wrap: wrap; align-items: center; }
+
+/* ── Editor ───────────────── */
+#ew { flex: 1; overflow-y: auto; display: none; }
+#ew.vis { display: block; }
+#ew::-webkit-scrollbar { width: 7px; }
+#ew::-webkit-scrollbar-track { background: #fafafa; }
+#ew::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+#ed { min-height: 100%; padding: 8px 14px 60px; font-family: Calibri, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; color: var(--text); outline: none; white-space: pre-wrap; word-break: break-word; }
+#ed [data-hl="p"] { background-color: var(--hl-pink); }
+#ed [data-hl="b"] { background-color: var(--hl-blue); }
+#ed [data-hl="g"] { background-color: var(--hl-green); }
+#ed [data-hl="y"] { background-color: var(--hl-yellow); }
+#ed [data-hl="o"] { background-color: var(--hl-orange); }
+#ed [data-hl="u"] { background-color: var(--hl-purple); }
+
+/* ── Section overlay (debug) ─────── */
+.sec-mark { display: none; align-items: center; gap: 6px; margin: 3px 0; user-select: none; }
+.secview .sec-mark { display: flex; }
+.sec-mark::before, .sec-mark::after { content: ''; flex: 1; height: 1px; }
+.sec-mark-lbl { font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase; padding: 0 5px; border-radius: 8px; white-space: nowrap; }
+.sec-mark.br3::before, .sec-mark.br3::after { background: #d7a9e8; }
+.sec-mark.br3 .sec-mark-lbl { color: #8a4ba8; background: #f4e9fb; }
+.sec-mark.br2::before, .sec-mark.br2::after { background: #d8dde3; }
+.sec-mark.br2 .sec-mark-lbl { color: #8792a0; background: #f0f2f5; }
+#sec-toggle.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Welcome ──────────────── */
+#welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dim); gap: 6px; padding: 30px; }
+#welcome h2 { font-size: 15px; font-weight: 400; color: var(--text); }
+.sr { display: flex; gap: 20px; margin-top: 6px; text-align: center; }
+.sv { font-size: 20px; font-weight: 600; color: var(--accent); display: block; }
+
+/* ── Search Results ───────── */
+#sres { display: none; flex: 1; overflow-y: auto; padding: 6px 10px; }
+#sres.vis { display: block; }
+.si { padding: 4px 6px; border-bottom: 1px solid var(--border-light); cursor: pointer; font-size: 12px; }
+.si:hover { background: var(--bg-hover); }
+.si-c { font-weight: 600; }
+.si-p { font-size: 10px; color: var(--text-dim); }
+
+/* ── Context Menu ─────────── */
+#ctx { display: none; position: fixed; background: #fff; border: 1px solid var(--border); border-radius: 3px; padding: 2px 0; min-width: 160px; z-index: 100; box-shadow: 0 3px 12px rgba(0,0,0,0.15); font-size: 12px; }
+#ctx.vis { display: block; }
+.ci { padding: 4px 10px; cursor: pointer; }
+.ci:hover { background: var(--bg-hover); }
+.ci.dan { color: #c33; }
+.cs { height: 1px; background: var(--border-light); margin: 2px 0; }
+.csub { font-size: 10px; color: var(--text-dim); padding: 2px 10px; }
+.ccol { display: flex; gap: 2px; padding: 3px 10px; }
+.csw { width: 16px; height: 16px; border-radius: 2px; border: 1px solid #ccc; cursor: pointer; }
+.csw:hover { border-color: #333; transform: scale(1.1); }
+
+/* ── Toast ────────────────── */
+#toast { position: fixed; bottom: 12px; right: 12px; background: #333; color: #fff; padding: 5px 12px; border-radius: 3px; font-size: 11px; z-index: 200; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
+#toast.show { opacity: 0.85; }
+#toast.err { background: #c33; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="tb-title">RightNote</span>
+  <div class="tb-sep"></div>
+  <input type="text" id="search-box" placeholder="Search (Ctrl+K)" />
+  <div class="tb-spacer"></div>
+  <span id="save-ind"></span>
+  <button class="tb-btn" onclick="toggleBg()" title="Toggle BG colors on tree">BG</button>
+  <button class="tb-btn" id="sec-toggle" onclick="toggleSections()" title="Show parser section/block breaks">Sections</button>
+  <button class="tb-btn" onclick="doBackup()">Backup</button>
+</div>
+
+<div id="main">
+  <div id="sidebar" class="bg-on">
+    <div id="page-hdr" onclick="togglePT()">
+      <span id="pg-tog" class="open">▶</span>
+      <span>Pages</span>
+      <span id="pg-lbl" style="margin-left:auto;color:var(--accent);font-weight:600"></span>
+    </div>
+    <div id="page-tabs" class="open"></div>
+    <div id="tree-box"></div>
+  </div>
+  <div id="rh"></div>
+  <div id="cpanel">
+    <div id="bc"></div>
+    <div id="meta"></div>
+    <div id="welcome">
+      <h2>RightNote Archive Explorer</h2>
+      <div id="wstats"></div>
+      <p style="font-size:11px;margin-top:8px;max-width:380px;text-align:center;line-height:1.5">
+        Select a page, click a note to edit.<br>
+        <b>Ctrl+S</b> save &nbsp; <b>Ctrl+B</b> bold &nbsp; <b>Ctrl+1</b>-<b>7</b> highlight<br>
+        <small>1=orange 2=yellow 3=green 4=blue 5=none 6=pink 7=purple</small><br>
+        Right-click tree nodes for options. Drag to reorder.
+      </p>
+    </div>
+    <div id="ew"><div id="ed" contenteditable="true" spellcheck="false"></div></div>
+    <div id="sres"></div>
+  </div>
+</div>
+
+<div id="ctx">
+  <div class="ci" onclick="ctxA('child')">New child note</div>
+  <div class="ci" onclick="ctxA('sib')">New sibling note</div>
+  <div class="cs"></div>
+  <div class="csub">Node background</div>
+  <div class="ccol">
+    <div class="csw" style="background:var(--hl-orange)" onclick="ctxBg('FFCC99')"></div>
+    <div class="csw" style="background:var(--hl-yellow)" onclick="ctxBg('FFFF99')"></div>
+    <div class="csw" style="background:var(--hl-green)" onclick="ctxBg('CCFFCC')"></div>
+    <div class="csw" style="background:var(--hl-blue)" onclick="ctxBg('CCFFFF')"></div>
+    <div class="csw" style="background:var(--hl-pink)" onclick="ctxBg('FF99CC')"></div>
+    <div class="csw" style="background:var(--hl-purple)" onclick="ctxBg('CC99FF')"></div>
+    <div class="csw" style="background:#fff" onclick="ctxBg('')"></div>
+  </div>
+  <div class="cs"></div>
+  <div class="ci dan" onclick="ctxA('del')">Delete note</div>
+  <div class="ci dan" onclick="ctxA('deltree')">Delete subtree</div>
+</div>
+
+<div id="tooltip"></div>
+<div id="toast"></div>
+
+<script>
+const A='';
+let pages=[],curPage=null,curNote=null,ctxT=null,dirty=false,saving=false;
+let curNoteData=null,sectionsOn=false;
+
+// ── API ─────────────────────────────────────────
+async function api(p,o){const r=await fetch(A+p,o);if(!r.ok){const e=await r.json().catch(()=>({error:r.statusText}));throw new Error(e.error||r.statusText)}return r.json()}
+const put=(p,b)=>api(p,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+const del=p=>api(p,{method:'DELETE'});
+function toast(m,e){const t=document.getElementById('toast');t.textContent=m;t.className=e?'show err':'show';clearTimeout(t._t);t._t=setTimeout(()=>t.className='',2500)}
+function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function fdate(iso){if(!iso)return'';try{return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}catch{return iso}}
+const semC={p:'var(--hl-pink)',b:'var(--hl-blue)',g:'var(--hl-green)',y:'var(--hl-yellow)',o:'var(--hl-orange)',u:'var(--hl-purple)'};
+const semL={p:'Pink',b:'Blue',g:'Green',y:'Yellow',o:'Orange',u:'Purple'};
+
+// ── Init ────────────────────────────────────────
+async function init(){
+  try{
+    pages=await api('/api/pages');
+    renderPT();
+    const ig=await api('/api/integrity');
+    document.getElementById('wstats').innerHTML=`<div class="sr"><div><span class="sv">${(ig.notes||0).toLocaleString()}</span>Notes</div><div><span class="sv">${pages.length}</span>Pages</div></div>`;
+    if(pages.length){const b=pages.reduce((a,x)=>(a.note_count||0)>(x.note_count||0)?a:x);selPage(b.id)}
+  }catch(e){document.getElementById('wstats').innerHTML=`<p style="color:#c33">Cannot connect.<br>Run: python rnt_server.py your-file.rnt</p>`}
+}
+function renderPT(){document.getElementById('page-tabs').innerHTML=pages.map(p=>`<div class="ptab" data-id="${p.id}" onclick="selPage(${p.id})">${esc(p.caption)}<span class="cnt">${p.note_count}</span></div>`).join('')}
+function togglePT(){document.getElementById('page-tabs').classList.toggle('open');document.getElementById('pg-tog').classList.toggle('open')}
+async function selPage(pid){await maybeSave();curPage=pid;document.querySelectorAll('.ptab').forEach(t=>t.classList.toggle('active',+t.dataset.id===pid));const p=pages.find(x=>x.id===pid);document.getElementById('pg-lbl').textContent=p?p.caption:'';loadTree(pid)}
+
+// ── Tree ────────────────────────────────────────
+async function loadTree(pid){
+  const c=document.getElementById('tree-box');
+  c.innerHTML='<div style="padding:6px;color:#aaa;font-size:11px">Loading…</div>';
+  try{const roots=await api(`/api/tree/${pid}`);c.innerHTML='';for(const n of roots)c.appendChild(mkN(n,0))}
+  catch(e){c.innerHTML=`<div style="padding:6px;color:#c33;font-size:11px">${esc(e.message)}</div>`}
+}
+
+function mkN(d,dep){
+  const w=document.createElement('div');
+  w.className='tw'; // tree-wrapper
+  w.dataset.uid=d.note_uid; w.dataset.tn=d.treenode_id; w.dataset.pg=d.page_id;
+  w.dataset.parentTn=d.parent_id; w.dataset.idx=d.index;
+
+  const r=document.createElement('div');
+  r.className='tn';
+  r.style.paddingLeft=(3+dep*14)+'px';
+  r.draggable=true;
+
+  const t=document.createElement('span');
+  t.className='tn-t'+(d.child_count>0?'':' no');
+  t.textContent='▶';
+  t.onclick=e=>{e.stopPropagation();togN(w,d,dep)};
+  r.appendChild(t);
+
+  const cap=document.createElement('span');
+  cap.className='tn-cap';
+  cap.textContent=d.caption||'(untitled)';
+  if(d.bg_semantic)cap.dataset.bg=d.bg_semantic;
+  r.appendChild(cap);
+
+  if(d.child_count>0){const cc=document.createElement('span');cc.className='tn-cc';cc.textContent=d.child_count;r.appendChild(cc)}
+
+  r.onclick=()=>selNote(d.note_uid,d.treenode_id,d.page_id);
+  r.oncontextmenu=e=>{e.preventDefault();showCtx(e,d)};
+
+  // Tooltip on hover for long captions
+  r.addEventListener('mouseenter', e => {
+    const fullText = d.caption || '';
+    if (fullText.length > 30) { // only show if text is likely truncated
+      showTooltip(e, fullText);
+    }
+  });
+  r.addEventListener('mouseleave', hideTooltip);
+  r.addEventListener('mousemove', moveTooltip);
+
+  // ── Drag & Drop ───────────────────────────────
+  r.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/plain', JSON.stringify({uid:d.note_uid, tn:d.treenode_id, pg:d.page_id}));
+    e.dataTransfer.effectAllowed='move';
+    setTimeout(()=>r.classList.add('dragging'),0);
+  });
+  r.addEventListener('dragend', ()=>{ r.classList.remove('dragging'); clearDropIndicators(); });
+  r.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect='move';
+    clearDropIndicators();
+    const rect=r.getBoundingClientRect();
+    const y=e.clientY-rect.top;
+    const h=rect.height;
+    if(y<h*0.25) r.classList.add('drag-over-above');
+    else if(y>h*0.75) r.classList.add('drag-over-below');
+    else r.classList.add('drag-over-into');
+  });
+  r.addEventListener('dragleave', ()=>{ r.classList.remove('drag-over-above','drag-over-below','drag-over-into'); });
+  r.addEventListener('drop', async e => {
+    e.preventDefault();
+    clearDropIndicators();
+    let src;
+    try{src=JSON.parse(e.dataTransfer.getData('text/plain'))}catch{return}
+    if(src.uid===d.note_uid)return; // can't drop on self
+
+    const rect=r.getBoundingClientRect();
+    const y=e.clientY-rect.top;
+    const h=rect.height;
+    let mode;
+    if(y<h*0.25) mode='above';
+    else if(y>h*0.75) mode='below';
+    else mode='into';
+
+    try{
+      if(mode==='into'){
+        // Move as child of target
+        await put(`/api/note/${src.uid}/move`,{parent_treenode_id:d.treenode_id, page_id:d.page_id});
+      } else {
+        // Move as sibling (above or below)
+        const parentTn=d.parent_id;
+        const pos=mode==='above'?d.index:d.index+1;
+        await put(`/api/note/${src.uid}/move`,{parent_treenode_id:parentTn, page_id:d.page_id, position:pos});
+      }
+      toast('Moved');
+      loadTree(d.page_id);
+    }catch(err){ toast('Move failed: '+err.message, true); }
+  });
+
+  w.appendChild(r);
+  const ch=document.createElement('div');ch.className='tc';w.appendChild(ch);
+  return w;
+}
+
+function clearDropIndicators(){
+  document.querySelectorAll('.drag-over-above,.drag-over-below,.drag-over-into').forEach(el=>el.classList.remove('drag-over-above','drag-over-below','drag-over-into'));
+}
+
+async function togN(w,d,dep){
+  const cc=w.querySelector('.tc'),t=w.querySelector('.tn-t');
+  if(cc.classList.contains('open')){cc.classList.remove('open');t.classList.remove('exp');return}
+  if(!cc.children.length&&d.child_count>0){
+    cc.innerHTML='<div style="padding:1px 20px;font-size:10px;color:#bbb">…</div>';cc.classList.add('open');
+    try{const ch=await api(`/api/tree/${d.page_id}/${d.treenode_id}`);cc.innerHTML='';for(const c of ch)cc.appendChild(mkN(c,dep+1))}
+    catch{cc.innerHTML='<div style="color:#c33;font-size:10px;padding-left:20px">Error</div>'}
+  }
+  cc.classList.add('open');t.classList.add('exp');
+}
+
+// ── Tooltip ─────────────────────────────────────
+function showTooltip(e, text) {
+  const tt=document.getElementById('tooltip');
+  tt.textContent=text;
+  tt.classList.add('vis');
+  positionTooltip(e.clientX, e.clientY);
+}
+function moveTooltip(e) {
+  const tt=document.getElementById('tooltip');
+  if(tt.classList.contains('vis')) positionTooltip(e.clientX, e.clientY);
+}
+function hideTooltip() { document.getElementById('tooltip').classList.remove('vis'); }
+function positionTooltip(x,y) {
+  const tt=document.getElementById('tooltip');
+  const pad=12;
+  tt.style.left=Math.min(x+pad, window.innerWidth-tt.offsetWidth-10)+'px';
+  tt.style.top=Math.min(y+pad, window.innerHeight-tt.offsetHeight-10)+'px';
+}
+
+// ── Note Selection ──────────────────────────────
+async function selNote(uid,tn,pg){
+  if(!uid)return;
+  await maybeSave();
+  curNote={uid,tn,pg};dirty=false;updSI();
+  document.querySelectorAll('.tn.active').forEach(n=>n.classList.remove('active'));
+  const w=document.querySelector(`[data-uid="${uid}"]`);
+  if(w)w.querySelector('.tn').classList.add('active');
+  showV('ed');
+  document.getElementById('ed').innerHTML='<span style="color:#aaa">Loading…</span>';
+  try{const note=await api(`/api/note/${uid}`);renderNote(note)}
+  catch(e){document.getElementById('ed').innerHTML=`<span style="color:#c33">${esc(e.message)}</span>`}
+}
+function showV(v){
+  document.getElementById('welcome').style.display=v==='welcome'?'flex':'none';
+  document.getElementById('ew').classList.toggle('vis',v==='ed');
+  document.getElementById('sres').classList.toggle('vis',v==='search');
+  document.getElementById('meta').classList.toggle('vis',v==='ed');
+}
+function renderNote(note){
+  const bc=document.getElementById('bc');
+  if(note.path&&note.path.length){bc.innerHTML=note.path.map((p,i)=>`<span onclick="selNote(${p.note_uid},${p.treenode_id},${p.page_id})">${esc(p.caption||'?')}</span>`+(i<note.path.length-1?'<span class="sep">›</span>':'')).join('')}else bc.textContent=note.path_str||'';
+  const meta=document.getElementById('meta');
+  let m='';
+  if(note.caption)m+=`<b>${esc(note.caption)}</b>`;
+  if(note.date_created)m+=` &nbsp;Created: ${fdate(note.date_created)}`;
+  if(note.last_modified)m+=` &nbsp;Modified: ${fdate(note.last_modified)}`;
+  if(note.bg_semantic)m+=` &nbsp;<span style="background:${semC[note.bg_semantic]||'#eee'};padding:0 5px;border-radius:2px;font-size:10px">${semL[note.bg_semantic]||''}</span>`;
+  if(note.highlight_ratio>0)m+=` &nbsp;HL: ${(note.highlight_ratio*100).toFixed(1)}%`;
+  meta.innerHTML=m;
+  curNoteData=note;
+  const ed=document.getElementById('ed');
+  if(note.internal_format){
+    ed.innerHTML=sectionsOn?ifmtToHTMLSections(note.internal_format):ifmtToHTML(note.internal_format);
+  }
+  else if(note.plain_text)ed.textContent=note.plain_text;
+  else ed.innerHTML='';
+  ed.dataset.uid=note.uid;
+  ed.contentEditable=sectionsOn?'false':'true';
+  ed.classList.toggle('secview',sectionsOn);
+}
+
+// ── Section overlay toggle (debug) ──────────────
+function toggleSections(){
+  sectionsOn=!sectionsOn;
+  document.getElementById('sec-toggle').classList.toggle('on',sectionsOn);
+  if(curNoteData)renderNote(curNoteData);
+}
+
+// ── Internal format → HTML, with [BR2]/[BR3] shown as visible markers
+// instead of silently becoming blank lines. Read-only view — never fed
+// back through edToRTF, so it can't corrupt a save.
+function ifmtToHTMLSections(s){
+  const BR3='<div class="sec-mark br3"><span class="sec-mark-lbl">section break</span></div>';
+  const BR2='<div class="sec-mark br2"><span class="sec-mark-lbl">block break</span></div>';
+  s=s.replace(/\[BR3\]/g,BR3).replace(/\[BR2\]/g,BR2);
+  let html='',i=0;const len=s.length;
+  while(i<len){
+    if(s.startsWith(BR3,i)){html+=BR3;i+=BR3.length;continue}
+    if(s.startsWith(BR2,i)){html+=BR2;i+=BR2.length;continue}
+    const m=s.substring(i).match(/^\[([bpgyouB])\]/);
+    if(m){const tag=m[1],close=`[/${tag}]`,ci=s.indexOf(close,i+m[0].length);
+      if(ci!==-1){const inner=s.substring(i+m[0].length,ci);
+        if(tag==='B')html+=`<b>${ifmtToHTMLSections(inner)}</b>`;
+        else html+=`<span data-hl="${tag}">${ifmtToHTMLSections(inner)}</span>`;
+        i=ci+close.length;continue}}
+    const ch=s[i];
+    if(ch==='<')html+='&lt;';else if(ch==='>')html+='&gt;';else if(ch==='&')html+='&amp;';else if(ch==='\n')html+='<br>';else html+=ch;
+    i++}
+  return html;
+}
+
+// ── Internal format → HTML ──────────────────────
+function ifmtToHTML(s){
+  s=s.replace(/\[BR3\]/g,'\n\n').replace(/\[BR2\]/g,'\n');
+  let html='',i=0;const len=s.length;
+  while(i<len){
+    const m=s.substring(i).match(/^\[([bpgyouB])\]/);
+    if(m){const tag=m[1],close=`[/${tag}]`,ci=s.indexOf(close,i+m[0].length);
+      if(ci!==-1){const inner=s.substring(i+m[0].length,ci);
+        if(tag==='B')html+=`<b>${ifmtToHTML(inner)}</b>`;
+        else html+=`<span data-hl="${tag}">${ifmtToHTML(inner)}</span>`;
+        i=ci+close.length;continue}}
+    const ch=s[i];
+    if(ch==='<')html+='&lt;';else if(ch==='>')html+='&gt;';else if(ch==='&')html+='&amp;';else if(ch==='\n')html+='<br>';else html+=ch;
+    i++}
+  return html;
+}
+
+// ── Editor → RTF ────────────────────────────────
+function edToRTF(){
+  const ed=document.getElementById('ed');
+  const ft='{\\fonttbl{\\f0\\fnil\\fcharset0 Calibri;}}';
+  const ct='{\\colortbl ;\\red255\\green153\\blue204;\\red204\\green255\\blue255;\\red204\\green255\\blue204;\\red255\\green255\\blue255;\\red255\\green255\\blue153;\\red255\\green204\\blue153;\\red204\\green153\\blue255;}';
+  const hm={p:1,b:2,g:3,y:5,o:6,u:7};
+  let body='';
+  function walk(n){
+    if(n.nodeType===3){let t=n.textContent;t=t.replace(/\\/g,'\\\\').replace(/\{/g,'\\{').replace(/\}/g,'\\}').replace(/\n/g,'\\par\n');body+=t;return}
+    if(n.nodeType!==1)return;
+    const tag=n.tagName.toLowerCase(),hl=n.getAttribute('data-hl');
+    if(tag==='br'){body+='\\par\n';return}
+    if(tag==='div'||tag==='p'){body+='\\par\n';for(const c of n.childNodes)walk(c);return}
+    let pre='',suf='';
+    if(tag==='b'||tag==='strong'){pre+='\\b ';suf='\\b0 '+suf}
+    if(hl&&hm[hl]){pre+=`\\highlight${hm[hl]} `;suf='\\highlight0 '+suf}
+    body+=pre;for(const c of n.childNodes)walk(c);body+=suf;
+  }
+  for(const c of ed.childNodes)walk(c);
+  return `{\\rtf1\\ansi\\deff0${ft}${ct}\\viewkind4\\uc1\\pard\\f0\\fs20 ${body}}`;
+}
+
+// ── Save ────────────────────────────────────────
+async function saveNote(){if(!curNote||!dirty||saving||sectionsOn)return;saving=true;updSI();try{await put(`/api/note/${curNote.uid}/rtf`,{rtf:edToRTF()});dirty=false;toast('Saved')}catch(e){toast('Save failed: '+e.message,true)}saving=false;updSI()}
+async function maybeSave(){if(dirty&&curNote)await saveNote()}
+function updSI(){const e=document.getElementById('save-ind');e.textContent=saving?'Saving…':dirty?'● Unsaved':''}
+document.getElementById('ed').addEventListener('input',()=>{dirty=true;updSI()});
+
+// ── Keyboard Shortcuts ──────────────────────────
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();saveNote();return}
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();document.getElementById('search-box').focus();return}
+  if(e.key==='Escape'){document.getElementById('ctx').classList.remove('vis');if(document.getElementById('sres').classList.contains('vis')){curNote?showV('ed'):showV('welcome');document.getElementById('search-box').value=''}return}
+
+  const ed=document.getElementById('ed');
+  if(!ed.contains(document.activeElement)&&document.activeElement!==ed)return;
+  if(sectionsOn)return; // read-only overlay — no edit shortcuts
+
+  // Force plain <br> line breaks — without this, browsers wrap each new
+  // line in a <div>/<p>, and edToRTF's walk() has no case for those, so
+  // the paragraph break is silently dropped on save (lines glue together).
+  if(e.key==='Enter'){e.preventDefault();document.execCommand('insertLineBreak');dirty=true;updSI();return}
+
+  if((e.ctrlKey||e.metaKey)&&e.key==='b'){e.preventDefault();document.execCommand('bold');dirty=true;updSI();return}
+
+  // Ctrl+1-7 — catch BOTH numpad and regular number keys
+  // e.key for regular keys is '1'-'7', for numpad it's also '1'-'7'
+  // e.code distinguishes: Digit1-Digit7 vs Numpad1-Numpad7
+  // We need to prevent Chrome's tab-switching on Ctrl+Digit1-9
+  if((e.ctrlKey||e.metaKey)&&(
+    (e.code>='Digit1'&&e.code<='Digit7')||
+    (e.code>='Numpad1'&&e.code<='Numpad7')
+  )){
+    e.preventDefault();
+    e.stopPropagation();
+    const num=e.code.replace('Digit','').replace('Numpad','');
+    const cm={'1':'o','2':'y','3':'g','4':'b','5':null,'6':'p','7':'u'};
+    applyHL(cm[num]);dirty=true;updSI();
+    return;
+  }
+});
+
+// ── Apply Highlight (fixed: properly removes old before applying new) ──
+function applyHL(color){
+  const sel=window.getSelection();
+  if(!sel||sel.isCollapsed)return;
+
+  // Save selection text
+  const range=sel.getRangeAt(0);
+
+  // First: completely remove all existing highlights in the selection
+  // We need to unwrap every data-hl span that overlaps with selection
+  const ed=document.getElementById('ed');
+
+  // Clone range content to check what we're working with
+  const selectedNodes=getSelectedHLSpans(range);
+
+  // Unwrap all highlight spans in the selection
+  for(const sp of selectedNodes){
+    const parent=sp.parentNode;
+    while(sp.firstChild) parent.insertBefore(sp.firstChild,sp);
+    parent.removeChild(sp);
+  }
+
+  // Normalize to merge adjacent text nodes
+  ed.normalize();
+
+  if(!color) return; // Ctrl+5 = just remove
+
+  // Re-select (DOM changed from unwrapping)
+  // The selection should still be roughly correct after normalize
+  const sel2=window.getSelection();
+  if(!sel2||sel2.isCollapsed)return;
+  const r2=sel2.getRangeAt(0);
+
+  // Now wrap the clean selection in the new color
+  const span=document.createElement('span');
+  span.setAttribute('data-hl',color);
+  try{
+    r2.surroundContents(span);
+  }catch{
+    // surroundContents fails across element boundaries — use extractContents
+    const frag=r2.extractContents();
+    span.appendChild(frag);
+    r2.insertNode(span);
+  }
+  // Re-select the new span
+  sel2.removeAllRanges();
+  const r3=document.createRange();
+  r3.selectNodeContents(span);
+  sel2.addRange(r3);
+}
+
+function getSelectedHLSpans(range){
+  // Get all data-hl spans that intersect with the range
+  const ed=document.getElementById('ed');
+  const all=[...ed.querySelectorAll('[data-hl]')];
+  return all.filter(sp=>range.intersectsNode(sp));
+}
+
+// ── Search ──────────────────────────────────────
+document.getElementById('search-box').addEventListener('keydown',async e=>{
+  if(e.key!=='Enter')return;
+  const q=e.target.value.trim();
+  if(!q){curNote?showV('ed'):showV('welcome');return}
+  showV('search');
+  const el=document.getElementById('sres');
+  el.innerHTML='<div style="padding:6px;color:#aaa;font-size:11px">Searching…</div>';
+  try{
+    const pp=curPage?`&page=${curPage}`:'';
+    const d=await api(`/api/search?q=${encodeURIComponent(q)}${pp}`);
+    if(!d.results.length){el.innerHTML='<div style="padding:6px;color:#aaa">No results.</div>';return}
+    el.innerHTML=`<div style="padding:3px 0;color:#aaa;font-size:10px">${d.count} results</div>`+
+      d.results.map(r=>`<div class="si" onclick="selNote(${r.uid},${r.treenode_id||0},${r.page_id})"><div class="si-c">${esc(r.caption)}</div>${r.path_str?`<div class="si-p">${esc(r.path_str)}</div>`:''}</div>`).join('');
+  }catch(err){el.innerHTML=`<div style="color:#c33;padding:6px">${esc(err.message)}</div>`}
+});
+
+// ── Context Menu (with viewport clamping) ───────
+function showCtx(e,d){
+  ctxT={uid:d.note_uid,tn:d.treenode_id,pg:d.page_id,parentTn:d.parent_id,idx:d.index};
+  const m=document.getElementById('ctx');
+  m.classList.add('vis');
+  // Position: clamp to viewport
+  const mw=m.offsetWidth, mh=m.offsetHeight;
+  let x=e.clientX, y=e.clientY;
+  if(x+mw>window.innerWidth) x=window.innerWidth-mw-4;
+  if(y+mh>window.innerHeight) y=window.innerHeight-mh-4;
+  if(x<0)x=4;
+  if(y<0)y=4;
+  m.style.left=x+'px';
+  m.style.top=y+'px';
+}
+document.addEventListener('click',()=>document.getElementById('ctx').classList.remove('vis'));
+
+async function ctxA(a){
+  if(!ctxT)return;document.getElementById('ctx').classList.remove('vis');
+  if(a==='child'){
+    const c=prompt('Child note caption:');if(!c)return;
+    try{const r=await post('/api/note',{page_id:ctxT.pg,parent_treenode_id:ctxT.tn,caption:c});toast(`Created uid=${r.uid}`);loadTree(ctxT.pg)}catch(e){toast(e.message,true)}
+  }
+  else if(a==='sib'){
+    const c=prompt('Sibling note caption:');if(!c)return;
+    try{
+      // FIX: position the new sibling right after the selected node, not at the end
+      const position=ctxT.idx+1; // insert right after the current node's index
+      const r=await post('/api/note',{page_id:ctxT.pg,parent_treenode_id:ctxT.parentTn,caption:c,position:position});
+      toast(`Created uid=${r.uid}`);
+      loadTree(ctxT.pg);
+    }catch(e){toast(e.message,true)}
+  }
+  else if(a==='del'){if(!confirm('Delete this note? Children re-parented.'))return;try{await del(`/api/note/${ctxT.uid}`);toast('Deleted');if(curNote&&curNote.uid===ctxT.uid){curNote=null;showV('welcome')}loadTree(ctxT.pg)}catch(e){toast(e.message,true)}}
+  else if(a==='deltree'){if(!confirm('Delete subtree? Cannot undo.'))return;try{await del(`/api/note/${ctxT.uid}?recursive=true`);toast('Deleted');if(curNote&&curNote.uid===ctxT.uid){curNote=null;showV('welcome')}loadTree(ctxT.pg)}catch(e){toast(e.message,true)}}
+}
+async function ctxBg(c){if(!ctxT)return;document.getElementById('ctx').classList.remove('vis');try{await put(`/api/note/${ctxT.uid}/bg_color`,{bg_color:c});toast('BG updated');loadTree(ctxT.pg)}catch(e){toast(e.message,true)}}
+
+function toggleBg(){document.getElementById('sidebar').classList.toggle('bg-on')}
+async function doBackup(){try{const r=await post('/api/backup',{});toast('Backup: '+r.backup_path)}catch{toast('Backup failed',true)}}
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+
+// ── Resize ──────────────────────────────────────
+{const h=document.getElementById('rh'),sb=document.getElementById('sidebar');let dr=false,sx,sw;
+h.addEventListener('mousedown',e=>{dr=true;sx=e.clientX;sw=sb.offsetWidth;h.classList.add('drag');document.body.style.cursor='col-resize';document.body.style.userSelect='none';e.preventDefault()});
+document.addEventListener('mousemove',e=>{if(!dr)return;sb.style.width=Math.max(150,Math.min(window.innerWidth*0.5,sw+(e.clientX-sx)))+'px'});
+document.addEventListener('mouseup',()=>{if(!dr)return;dr=false;h.classList.remove('drag');document.body.style.cursor='';document.body.style.userSelect=''})}
+
+init();
+</script>
+</body>
+</html>

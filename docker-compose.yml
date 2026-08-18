@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./exports:/app/exports
+      - ./results:/app/results
+    environment:
+      # Ollama runs on the host, not in this container, so it keeps your
+      # pulled models and any GPU access.
+      OLLAMA_URL: http://host.docker.internal:11434
+    env_file:
+      - path: .env
+        required: false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # needed on Linux

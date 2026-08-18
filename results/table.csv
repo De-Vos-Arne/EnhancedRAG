@@ -1,0 +1,10 @@
+regime,n
+R0_baseline_fts,0
+R1_baseline_vector,0
+R2_weight_boost,0
+R3_context_embed,0
+R4_weight_filter,0
+R5_prompt_meta,0
+R6_full_metadata,0
+R7_long_context,0
+R8_pooled_curated,0

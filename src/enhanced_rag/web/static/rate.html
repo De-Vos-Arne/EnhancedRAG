@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rate answers</title>
+<style>
+:root{--ink:#ffffff;--panel:#f3f3f3;--line:#c8c8c8;--fg:#1a1a1a;--mut:#777;
+  --accent:#2b5797;--open:#a8562b;
+  --mono:ui-monospace,Menlo,Consolas,monospace;--sans:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.55}
+header{border-bottom:1px solid var(--line);padding:14px 22px;display:flex;
+  gap:18px;align-items:center;flex-wrap:wrap;position:sticky;top:0;background:var(--panel);z-index:10}
+h1{font-size:15px;margin:0;letter-spacing:.14em;text-transform:uppercase}
+nav{margin-left:auto;display:flex;gap:14px;align-items:center}
+nav a{color:var(--mut);font-size:12px;text-decoration:none}
+nav a:hover{color:var(--accent)}
+select{background:var(--panel);color:var(--fg);border:1px solid var(--line);
+  border-radius:6px;padding:5px 8px;font:12px var(--mono)}
+.toggle{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.toggle button{background:transparent;border:0;color:var(--mut);padding:6px 13px;
+  font:600 11.5px var(--sans);cursor:pointer;letter-spacing:.04em}
+.toggle button[aria-pressed="true"]{background:var(--panel);color:var(--fg)}
+main{max-width:1500px;margin:0 auto;padding:22px}
+.qbar{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:16px 18px;margin-bottom:8px}
+.qbar .grp{font:11px var(--mono);color:var(--accent);letter-spacing:.1em;
+  text-transform:uppercase;margin-bottom:6px}
+.qbar h2{margin:0;font-size:19px;font-weight:600}
+.qbar p{margin:8px 0 0;color:var(--mut);font-size:13px}
+.mode{font:11.5px var(--mono);margin:0 0 16px;color:var(--mut)}
+.mode b{color:var(--accent)}
+.mode.open b{color:var(--open)}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(360px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  display:flex;flex-direction:column}
+.card.done{border-color:var(--accent)}
+.card h3{margin:0;padding:11px 16px;font:600 12px var(--mono);color:var(--mut);
+  border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px}
+.card h3 .who{color:var(--open)}
+.body{padding:15px 16px;white-space:pre-wrap;font-size:14px;flex:1;
+  max-height:440px;overflow:auto}
+.scores{border-top:1px solid var(--line);padding:12px 16px}
+.row{display:flex;align-items:center;gap:11px;margin-bottom:9px}
+.row label{width:104px;font:11.5px var(--mono);color:var(--mut)}
+.row input[type=range]{flex:1;accent-color:var(--accent)}
+.row output{width:34px;text-align:right;font:600 13px var(--mono)}
+.row.overall{margin-bottom:14px;padding-bottom:12px;border-bottom:1px dashed var(--line)}
+.row.overall label{width:104px;font:700 12px var(--sans);color:var(--fg);text-transform:none}
+.row.overall output{font-size:16px;color:var(--accent)}
+.detail-toggle{background:none;border:0;color:var(--mut);font:11px var(--mono);
+  cursor:pointer;padding:0 0 8px;text-decoration:underline}
+.detail{display:none}
+.detail.show{display:block}
+textarea{width:100%;background:var(--ink);border:1px solid var(--line);color:var(--fg);
+  border-radius:6px;padding:8px;font:inherit;font-size:13px;resize:vertical}
+button.save{background:var(--accent);color:#fff;border:0;border-radius:7px;
+  padding:9px 18px;font:600 13px var(--sans);cursor:pointer;margin-top:9px;width:100%}
+button.nav{background:transparent;border:1px solid var(--line);color:var(--fg);
+  padding:10px 22px;border-radius:7px;font:600 13px var(--sans);cursor:pointer;margin-top:20px}
+.status{color:var(--mut);font:12px var(--mono)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Rate answers</h1>
+  <div class="toggle" role="group" aria-label="Rating mode">
+    <button id="mBlind" aria-pressed="true">Blind</button>
+    <button id="mOpen" aria-pressed="false">Show regimes</button>
+  </div>
+  <select id="jump" aria-label="Jump to question"></select>
+  <div class="status" id="left"></div>
+  <nav><a href="/rag/">← Bench</a><a href="/">Explorer</a></nav>
+</header>
+<main><div id="app"></div></main>
+
+<script>
+const esc=s=>(s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let BLIND=true, CUR=null;
+
+function setMode(b){
+  BLIND=b;
+  document.getElementById('mBlind').setAttribute('aria-pressed',b);
+  document.getElementById('mOpen').setAttribute('aria-pressed',!b);
+  load(CUR?CUR.question_id:null);
+}
+document.getElementById('mBlind').onclick=()=>setMode(true);
+document.getElementById('mOpen').onclick=()=>setMode(false);
+
+async function load(questionId){
+  const url='/rag/api/rate/next?blind='+(BLIND?1:0)+
+    (questionId?'&question_id='+encodeURIComponent(questionId):'');
+  const d=await (await fetch(url)).json();
+  const app=document.getElementById('app');
+  if(d.error){app.innerHTML=`<div class="qbar"><h2>${esc(d.error)}</h2></div>`;return;}
+  if(d.done){
+    app.innerHTML = d.no_runs
+      ? '<div class="qbar"><h2>No answers to rate yet.</h2>'+
+        '<p>Nothing has been generated — <code>--dry-run</code> only checks retrieval and '+
+        'never saves answers. Run <code>python scripts/run_eval.py</code> (without '+
+        '<code>--dry-run</code>) to actually generate and store answers, then reload this page.</p></div>'
+      : '<div class="qbar"><h2>Everything is rated.</h2>'+
+        '<p>Run <code>python scripts/analyse.py</code> for the per-regime and '+
+        'per-group tables. Switch to <em>Show regimes</em> above to revisit any '+
+        'question with the labels visible.</p></div>';
+    return;
+  }
+  CUR=d;
+  document.getElementById('left').textContent=d.remaining+' answers unrated';
+
+  const jump=document.getElementById('jump');
+  if(jump.options.length!==d.all_question_ids.length){
+    jump.innerHTML='<option value="">Next unrated…</option>'+
+      d.all_question_ids.map(q=>`<option value="${q}">${q}</option>`).join('');
+    jump.onchange=()=>load(jump.value||null);
+  }
+  jump.value=d.question_id;
+
+  app.innerHTML=`
+    <div class="qbar">
+      <div class="grp">Group ${esc(d.group)} · ${esc(d.group_name)} · ${esc(d.question_id)}</div>
+      <h2>${esc(d.question)}</h2>
+      ${d.hypothesis?`<p>${esc(d.hypothesis)}</p>`:''}
+      ${d.note?`<p>${esc(d.note)}</p>`:''}
+    </div>
+    <p class="mode ${BLIND?'':'open'}">${BLIND
+      ? 'Mode: <b>blind</b> — answers shuffled, regimes hidden. Use these scores in the thesis.'
+      : 'Mode: <b>open</b> — regimes visible. Useful for inspecting behaviour; '+
+        'these ratings are stored as unblinded and reported separately.'}</p>
+    <div class="grid">${d.items.map(card).join('')}</div>
+    <button class="nav" onclick="load(null)">Next unrated question</button>`;
+}
+
+function card(it,i){
+  const who = BLIND ? `Answer ${String.fromCharCode(65+i)}`
+                    : `<span class="who">${esc(it.regime_label||it.regime)}</span>`;
+  const s = it.scores||{};
+  return `<section class="card ${it.rated?'done':''}" id="c${it.run_id}">
+    <h3><span>${who}</span><span>${it.n_fragments} fragments${it.rated?' · rated':''}</span></h3>
+    <div class="body">${esc(it.answer)}</div>
+    <div class="scores">
+      ${slider(it.run_id,'overall','Overall',s.overall,'overall')}
+      <button type="button" class="detail-toggle" onclick="this.nextElementSibling.classList.toggle('show')">breakdown (optional) ▾</button>
+      <div class="detail">
+        ${slider(it.run_id,'correctness','Correctness',s.correctness)}
+        ${slider(it.run_id,'completeness','Completeness',s.completeness)}
+        ${slider(it.run_id,'grounding','Grounding',s.grounding)}
+      </div>
+      <textarea id="n${it.run_id}" rows="2" placeholder="Notes — what did it miss, what did it get right that the others didn't?"></textarea>
+      <button class="save" onclick="save(${it.run_id})">Save score</button>
+    </div>
+  </section>`;
+}
+
+function slider(id,key,label,val,cls){
+  const v=(val===undefined||val===null)?50:val;
+  return `<div class="row${cls?' '+cls:''}"><label for="${key}${id}">${label}</label>
+    <input type="range" id="${key}${id}" min="0" max="100" value="${v}"
+      oninput="document.getElementById('o${key}${id}').value=this.value">
+    <output id="o${key}${id}">${v}</output></div>`;
+}
+
+async function save(id){
+  const v=k=>+document.getElementById(k+id).value;
+  // The breakdown sliders default to 50 whether or not you ever looked at
+  // them — only send them if the detail panel was actually opened, so an
+  // untouched breakdown is stored as "not rated" (null) rather than a
+  // fake neutral 50 that would quietly pollute the diagnostic averages.
+  const card = document.getElementById('c'+id);
+  const detailOpened = card.querySelector('.detail').classList.contains('show');
+  const body = {run_id:id, overall:v('overall'), blind:BLIND,
+    notes:document.getElementById('n'+id).value};
+  if(detailOpened){
+    body.correctness=v('correctness'); body.completeness=v('completeness'); body.grounding=v('grounding');
+  }
+  const r=await (await fetch('/rag/api/rate',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)})).json();
+  document.getElementById('c'+id).classList.add('done');
+  document.getElementById('left').textContent=r.remaining+' answers unrated';
+  if(BLIND&&[...document.querySelectorAll('.card')].every(c=>c.classList.contains('done')))
+    setTimeout(()=>load(null),450);
+}
+load(null);
+</script>
+</body>
+</html>

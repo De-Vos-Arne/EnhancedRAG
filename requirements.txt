@@ -1,0 +1,15 @@
+flask>=3.0
+flask-cors>=4.0
+numpy>=1.24
+requests>=2.31
+
+# Windows only, for the export tool's clipboard mode.
+# The --in/--out file mode works without it on any platform.
+# pywin32>=306 ; sys_platform == "win32"
+
+# Optional: MCP server, so Claude can query the archive directly.
+# pip install "mcp[cli]"
+
+# Optional: tools/clipboard_tool.py — Windows tray app for converting
+# RightNote clipboard content into tagged text for pasting into an LLM chat.
+# pip install pywin32 keyboard pystray Pillow

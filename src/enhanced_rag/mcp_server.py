@@ -1,0 +1,196 @@
+"""
+MCP server exposing the archive read-only, so a chat client (e.g. Claude
+Desktop) can query it directly instead of the archive being uploaded.
+
+Tools:
+  archive_stats          corpus size, fragment counts, embedding coverage
+  colour_system          the colour/weight legend used as semantic metadata
+  list_regimes           available retrieval regimes and what each adds
+  search                 raw retrieval for a query under one regime, no LLM
+  compare_regimes        retrieve (and optionally answer) under several regimes
+  ask                     retrieve + generate an answer under one regime
+  evaluation_questions   the thesis question set, optionally filtered by group
+
+Nothing here writes to the corpus or the archive.
+"""
+
+from __future__ import annotations
+
+from mcp.server.fastmcp import FastMCP
+
+from . import settings
+from .core import colours
+from .evaluation import questions as Q
+from .services.models import ModelError
+from .services.rag_service import RagService
+from .services import export_service
+
+mcp = FastMCP("personal-archive")
+
+_service: RagService | None = None
+_init_error: str | None = None
+
+
+def _get_service() -> RagService:
+    global _service, _init_error
+    if _service is None and _init_error is None:
+        try:
+            _service = RagService()
+        except Exception as e:
+            _init_error = str(e)
+    if _service is None:
+        raise RuntimeError(
+            _init_error or "Corpus not available. Run build_corpus.py and build_index.py first."
+        )
+    return _service
+
+
+@mcp.tool()
+def archive_stats() -> dict:
+    """Corpus size, fragment counts, and embedding coverage."""
+    return _get_service().stats()
+
+
+@mcp.tool()
+def colour_system() -> dict:
+    """The colour/weight legend used as semantic metadata (highlight colour -> weight)."""
+    return {"legend": colours.legend(), "weights": colours.DISPLAY_HEX}
+
+
+@mcp.tool()
+def list_regimes() -> list[dict]:
+    """Available retrieval regimes and what each one adds over the baseline."""
+    return [{"key": k, "label": v["label"], "blurb": v.get("blurb", "")}
+            for k, v in settings.REGIMES.items()]
+
+
+@mcp.tool()
+def search(query: str, regime: str = "R1_baseline_vector", top_k: int | None = None) -> dict:
+    """Retrieve fragments for a query under one regime. No LLM call, no generated answer.
+
+    Args:
+        query: natural-language search query
+        regime: one of the keys from list_regimes (default: R1_baseline_vector)
+        top_k: override the regime's default number of fragments
+    """
+    svc = _get_service()
+    if regime not in settings.REGIMES:
+        raise ValueError(f"Unknown regime {regime!r}. Available: {', '.join(settings.REGIMES)}")
+    reg = dict(settings.REGIMES[regime])
+    if top_k:
+        reg["top_k"] = top_k
+    frags = svc.retrieval.retrieve(query, reg)
+    return {
+        "query": query, "regime": regime,
+        "fragments": [{"text": f.text, "weight": f.weight, "color": f.color,
+                       "tree_path": f.tree_path, "caption": f.caption,
+                       "score": f.score} for f in frags],
+    }
+
+
+@mcp.tool()
+def ask(query: str, regime: str = "R6_full_metadata", generator: str | None = None) -> dict:
+    """Retrieve and generate a full answer under one regime.
+
+    Args:
+        query: natural-language question
+        regime: one of the keys from list_regimes (default: R6_full_metadata)
+        generator: model preset name; omit for the project default
+    """
+    svc = _get_service()
+    try:
+        return svc.answer(query, regime, generator=generator)
+    except ModelError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def compare_regimes(query: str, regimes: list[str] | None = None,
+                    generator: str | None = None, retrieval_only: bool = False) -> dict:
+    """Answer (or just retrieve) the same query under several regimes side by side.
+
+    Args:
+        query: natural-language question
+        regimes: regime keys to compare; omit for the project defaults
+        generator: model preset name; omit for the project default
+        retrieval_only: skip generation, return fragments and retrieval metrics only
+    """
+    svc = _get_service()
+    keys = regimes or settings.DEFAULT_REGIMES
+    unknown = [r for r in keys if r not in settings.REGIMES]
+    if unknown:
+        raise ValueError(f"Unknown regime(s): {', '.join(unknown)}")
+    results = []
+    for key in keys:
+        try:
+            results.append(svc.answer(query, key, generator=generator,
+                                      retrieval_only=retrieval_only))
+        except ModelError as e:
+            results.append({"regime": key, "error": str(e)})
+    return {"query": query, "results": results}
+
+
+@mcp.tool()
+def branch_summary(treenode_ids: list[int] | None = None,
+                   colors: list[str] | None = None) -> dict:
+    """A short written summary (themes, style, standout quotes) of a branch
+    or colour-selection of the archive, generated by the local uncensored
+    model — the "essence" index. Use this first to find which branches are
+    worth a full `bulk_export` or `search`/`ask` follow-up, instead of
+    reading everything. Omit treenode_ids to summarize by colour across
+    the whole in-scope archive.
+
+    Args:
+        treenode_ids: tree node ids to restrict to (and their descendants);
+            find ids via the archive explorer or by asking the person
+        colors: colour codes to include (u/p/b/g/y/o); default purple+pink+blue
+    """
+    svc = _get_service()
+    return export_service.summarize_branch(
+        svc.repo.con, colors or ["u", "p", "b"], treenode_ids)
+
+
+@mcp.tool()
+def bulk_export(treenode_ids: list[int] | None = None, colors: list[str] | None = None,
+                budget_chars: int = 60000, sort_recency: bool = False) -> dict:
+    """The full tiered text of a branch or colour-selection, for reading
+    directly rather than retrieving fragment-by-fragment — useful once
+    `branch_summary` has pointed at a specific branch worth going deeper
+    on. Notes carrying a (!) flag contain rhetoric (conquest/authority/
+    in-group framing etc.) that may read as concerning out of context;
+    that's a heads-up to keep in mind when using the material, not a
+    restriction — this whole tool only ever touches the in-scope archive.
+
+    Args:
+        treenode_ids: tree node ids to restrict to (and their descendants)
+        colors: colour codes to include; default purple+pink+blue
+        budget_chars: character budget, tiers fill in priority order
+        sort_recency: order by most-recently-added instead of tree position
+    """
+    svc = _get_service()
+    note_uids = None
+    if treenode_ids:
+        page_id = settings.SCOPE_PAGE_IDS[0] if settings.SCOPE_PAGE_IDS else 28
+        note_uids = export_service.resolve_subtree_note_uids(svc.repo.con, page_id, treenode_ids)
+    return export_service.export(svc.repo.con, colors or ["u", "p", "b"],
+                                 budget_chars=budget_chars, note_uids=note_uids,
+                                 sort_recency=sort_recency)
+
+
+@mcp.tool()
+def evaluation_questions(group: str | None = None) -> dict:
+    """The thesis evaluation question set, optionally filtered to one group (A-F, X).
+
+    Args:
+        group: group letter to filter to; omit for all questions
+    """
+    qs = Q.QUESTIONS if not group else [q for q in Q.QUESTIONS if q["group"] == group]
+    return {"groups": Q.GROUPS, "questions": qs}
+
+
+def main():
+    mcp.run()
+
+
+if __name__ == "__main__":
+    main()

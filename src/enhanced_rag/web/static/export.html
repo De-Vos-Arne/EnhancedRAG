@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulk export</title>
+<style>
+:root{
+  --bg:#ffffff; --bg-panel:#f3f3f3; --bg-hover:#e4eaf2;
+  --border:#c8c8c8; --border-light:#e0e0e0; --text:#1a1a1a; --text-dim:#777;
+  --accent:#2b5797;
+  --hl-purple:#CC99FF; --hl-pink:#FF99CC; --hl-blue:#CCFFFF; --hl-green:#CCFFCC;
+  --hl-yellow:#FFFF99; --hl-orange:#FFCC99;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.55}
+header{border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;background:var(--bg-panel)}
+h1{font-size:12px;margin:0;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--accent)}
+nav a{color:var(--text-dim);font-size:11.5px;text-decoration:none}
+nav a:hover{color:var(--accent)}
+main{padding:20px;max-width:1200px;margin:0 auto;display:grid;grid-template-columns:320px 1fr;gap:20px}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.panel{background:#fff;border:1px solid var(--border);border-radius:6px;padding:14px}
+.panel h2{margin:0 0 10px;font-size:12.5px;font-weight:600}
+.color-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px}
+.color-row input[type=checkbox]{margin:0}
+.color-row .sw{width:12px;height:12px;border-radius:2px;border:1px solid rgba(0,0,0,.15)}
+.color-row .n{flex:1}
+.color-row .stat{color:var(--text-dim);font:11px var(--mono)}
+.budget-ctl{margin-top:14px}
+.budget-ctl label{font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px}
+.budget-ctl input[type=range]{width:100%}
+.budget-presets{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.budget-presets button{background:transparent;border:1px solid var(--border);color:var(--text-dim);font:11px var(--sans);padding:3px 9px;border-radius:4px;cursor:pointer}
+.budget-presets button:hover{color:var(--text);border-color:var(--accent)}
+.budget-val{font:12px var(--mono);color:var(--text);margin-top:4px}
+button.primary{background:var(--accent);color:#fff;border:0;border-radius:4px;padding:8px 16px;font:600 12.5px var(--sans);cursor:pointer;margin-top:14px;width:100%}
+button.ghost{background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:4px;padding:6px 12px;font:12px var(--sans);cursor:pointer}
+.tiers{margin-top:12px;font:11px var(--mono);color:var(--text-dim)}
+.tiers div{padding:2px 0}
+.tiers .full{color:#2a2}
+.tiers .partial{color:#c80}
+#output-panel h2{display:flex;justify-content:space-between;align-items:center}
+#output-stats{font:11px var(--mono);color:var(--text-dim)}
+#output{width:100%;height:60vh;font:11.5px var(--mono);border:1px solid var(--border);border-radius:4px;padding:10px;resize:vertical;background:var(--bg-panel);color:var(--text)}
+.output-btns{display:flex;gap:8px;margin-top:8px}
+#status{font-size:11.5px;color:var(--text-dim);margin-top:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Bulk Export</h1>
+  <nav><a href="/">Archive explorer</a> · <a href="/rag/">Retrieval bench</a> · <a href="/rag/rate">Rate answers</a></nav>
+</header>
+
+<main>
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="panel">
+      <h2>Curate for a question <span style="font-weight:400;color:var(--text-dim);font-size:11px">(retrieval-driven — finds relevant notes, exports their full context)</span></h2>
+      <textarea id="curate-query" rows="2" placeholder="e.g. What is Aetherialism?" style="width:100%;font:12.5px var(--sans);border:1px solid var(--border);border-radius:4px;padding:6px;resize:vertical"></textarea>
+      <button class="ghost" id="curate-btn" style="margin-top:8px;width:100%">Curate for this question</button>
+      <div id="curate-status" style="font-size:11.5px;color:var(--text-dim);margin-top:6px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Colours to include (priority order)</h2>
+      <div id="colors"></div>
+
+      <div class="budget-ctl">
+        <label>Character budget (0 = no limit) — fills tiers in priority order until spent</label>
+        <input type="range" id="budget" min="0" max="2000000" step="10000" value="0" />
+        <div class="budget-val" id="budget-val">No limit</div>
+        <div class="budget-presets" id="budget-presets"></div>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px">
+        <input type="checkbox" id="include-intro" />
+        Prepend "this is an export of a personal archive…" framing note
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px">
+        <input type="checkbox" id="include-legend" />
+        Prepend the colour-tag legend (what each colour/weight means)
+      </label>
+
+      <button class="primary" id="build">Build export</button>
+      <div class="tiers" id="tiers"></div>
+      <div id="status"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Limit to specific notes/branches <span style="font-weight:400;color:var(--text-dim);font-size:11px">(optional — leave nothing checked to export by colour across the whole archive)</span></h2>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11px;color:var(--text-dim)">
+        <span>Dim branches not tagged:</span>
+        <select id="tree-color-filter" style="font:11px var(--sans);border:1px solid var(--border);border-radius:3px;padding:2px 4px">
+          <option value="">(any)</option>
+          <option value="u">Purple</option><option value="p">Pink</option><option value="b">Blue</option>
+          <option value="g">Green</option><option value="y">Yellow</option><option value="o">Orange</option>
+        </select>
+      </div>
+      <div id="tree-box" style="max-height:340px;overflow-y:auto;border:1px solid var(--border-light);border-radius:4px;padding:4px"></div>
+      <div style="margin-top:8px;font-size:11px;color:var(--text-dim)" id="tree-selection-note">No branches selected — exporting from the whole archive.</div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px">
+        <input type="checkbox" id="sort-recency" />
+        Sort output by most-recently-added instead of tree order
+      </label>
+      <button class="ghost" id="summarize-btn" style="margin-top:10px;width:100%">Summarize selection (essence, via local model)</button>
+    </div>
+  </div>
+
+  <div class="panel" id="output-panel">
+    <h2><span>Output</span><span id="output-stats"></span></h2>
+    <textarea id="output" readonly placeholder="Build an export to see it here…"></textarea>
+    <div class="output-btns">
+      <button class="ghost" id="copy-btn">Copy to clipboard</button>
+      <button class="ghost" id="download-btn">Download .txt</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const esc = s => (s||"").replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const HEX = {u:'var(--hl-purple)', p:'var(--hl-pink)', b:'var(--hl-blue)', g:'var(--hl-green)',
+            g2:'var(--hl-green)', y:'var(--hl-yellow)', o:'var(--hl-orange)',
+            nb:'#ddd', n:'#eee'};
+let COLOR_STATS = [];
+
+let PAGE_ID = 28;
+let checkedTreenodes = new Set();
+
+async function boot(){
+  const r = await (await fetch('/rag/api/export/stats')).json();
+  COLOR_STATS = r.colours;
+  PAGE_ID = r.page_id;
+  const box = document.getElementById('colors');
+  box.innerHTML = COLOR_STATS.filter(c=>c.code).map(c=>`
+    <label class="color-row">
+      <input type="checkbox" data-code="${c.code}" ${['u','p','b'].includes(c.code)?'checked':''} />
+      <span class="sw" style="background:${HEX[c.code]}"></span>
+      <span class="n">${c.name} (w${c.weight})</span>
+      <span class="stat">${c.units.toLocaleString()} units, ${Math.round(c.chars/1000).toLocaleString()}K chars</span>
+    </label>`).join('');
+
+  // Presets: rough char budgets for common context windows (~4 chars/token,
+  // minus headroom for a question + answer).
+  const presets = [
+    ['~8K ctx', 24000], ['~32K ctx', 110000], ['~128K ctx', 470000],
+    ['~1M ctx', 3700000], ['No limit', 0],
+  ];
+  document.getElementById('budget-presets').innerHTML = presets.map(([label,val])=>
+    `<button type="button" data-val="${val}">${label}</button>`).join('');
+  document.querySelectorAll('#budget-presets button').forEach(b=>{
+    b.onclick=()=>{ document.getElementById('budget').value=b.dataset.val; updateBudgetVal(); };
+  });
+  updateBudgetVal();
+  loadTreeRoots();
+}
+
+function updateBudgetVal(){
+  const v = parseInt(document.getElementById('budget').value,10);
+  document.getElementById('budget-val').textContent = v===0 ? 'No limit' :
+    `${v.toLocaleString()} chars (~${Math.round(v/4).toLocaleString()} tokens)`;
+}
+document.getElementById('budget').addEventListener('input', updateBudgetVal);
+
+// ── Tree checkbox selector — same lazy-loaded accordion the explorer
+// uses (/api/tree/<page>[/<treenode>]), read-only here, with a checkbox
+// per node instead of click-to-open. Checking a branch includes it and
+// everything under it (resolved server-side); checking both a parent and
+// its own child is harmless — the backend just dedupes note_uids.
+async function loadTreeRoots(){
+  const box = document.getElementById('tree-box');
+  box.innerHTML = '<div style="padding:6px;color:var(--text-dim);font-size:11px">Loading…</div>';
+  try{
+    const roots = await (await fetch(`/api/tree/${PAGE_ID}`)).json();
+    box.innerHTML = '';
+    roots.forEach(n=>box.appendChild(mkTreeNode(n,0)));
+  }catch(e){
+    box.innerHTML = `<div style="padding:6px;color:#c33;font-size:11px">Failed to load tree: ${esc(e.message)}</div>`;
+  }
+}
+
+function mkTreeNode(d, dep){
+  const w=document.createElement('div');
+  w.dataset.semantic = d.bg_semantic || '';
+  const row=document.createElement('div');
+  row.style.cssText=`display:flex;align-items:center;gap:5px;padding:2px 0 2px ${dep*14}px;font-size:12px`;
+
+  const toggle=document.createElement('span');
+  toggle.textContent = d.child_count>0 ? '▶' : ' ';
+  toggle.style.cssText='width:12px;font-size:9px;color:#aaa;cursor:pointer;flex-shrink:0';
+  row.appendChild(toggle);
+
+  const cb=document.createElement('input');
+  cb.type='checkbox';
+  cb.onchange=()=>{
+    if(cb.checked) checkedTreenodes.add(d.treenode_id); else checkedTreenodes.delete(d.treenode_id);
+    updateTreeSelectionNote();
+  };
+  row.appendChild(cb);
+
+  if(d.bg_semantic && HEX[d.bg_semantic]){
+    const sw=document.createElement('span');
+    sw.style.cssText=`width:9px;height:9px;border-radius:2px;flex-shrink:0;background:${HEX[d.bg_semantic]};border:1px solid rgba(0,0,0,.2)`;
+    row.appendChild(sw);
+  }
+
+  const cap=document.createElement('span');
+  cap.textContent = (d.caption||'(untitled)') + (d.child_count>0?` (${d.child_count})`:'');
+  cap.style.cssText='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1';
+  row.appendChild(cap);
+
+  const eye=document.createElement('span');
+  eye.textContent='👁';
+  eye.title='Preview this branch\'s content';
+  eye.style.cssText='cursor:pointer;flex-shrink:0;opacity:.5;font-size:11px';
+  eye.onmouseenter=()=>eye.style.opacity='1';
+  eye.onmouseleave=()=>eye.style.opacity='.5';
+  eye.onclick=async(ev)=>{
+    ev.stopPropagation();
+    const out=document.getElementById('output');
+    const stats=document.getElementById('output-stats');
+    out.value='Loading preview…'; stats.textContent='';
+    try{
+      const res=await (await fetch('/rag/api/export/preview',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({treenode_ids:[d.treenode_id]})})).json();
+      if(res.error){ out.value=''; document.getElementById('status').textContent='Error: '+res.error; return; }
+      out.value = res.text;
+      stats.textContent = `preview: ${res.unit_count} units${res.truncated?' (truncated)':''} — not added to selection`;
+    }catch(e){ out.value=''; document.getElementById('status').textContent='Preview failed: '+e.message; }
+  };
+  row.appendChild(eye);
+
+  w.appendChild(row);
+  const childBox=document.createElement('div');
+  w.appendChild(childBox);
+
+  let loaded=false;
+  const openToggle=async()=>{
+    if(d.child_count<=0) return;
+    if(!loaded){
+      toggle.textContent='…';
+      const kids=await (await fetch(`/api/tree/${PAGE_ID}/${d.treenode_id}`)).json();
+      kids.forEach(k=>childBox.appendChild(mkTreeNode(k,dep+1)));
+      loaded=true;
+    }
+    const open = childBox.style.display==='block';
+    childBox.style.display = open ? 'none' : 'block';
+    toggle.textContent = open ? '▶' : '▼';
+  };
+  childBox.style.display='none';
+  toggle.onclick=openToggle;
+  return w;
+}
+
+document.getElementById('tree-color-filter').addEventListener('change', (e)=>{
+  const want = e.target.value;
+  document.querySelectorAll('#tree-box [data-semantic]').forEach(el=>{
+    el.style.opacity = (!want || el.dataset.semantic === want) ? '1' : '0.3';
+  });
+});
+
+function updateTreeSelectionNote(){
+  const n=checkedTreenodes.size;
+  document.getElementById('tree-selection-note').textContent = n===0
+    ? 'No branches selected — exporting from the whole archive.'
+    : `${n} branch${n>1?'es':''} selected — export will be limited to these and their contents.`;
+}
+
+document.getElementById('build').onclick = async ()=>{
+  const colors = [...document.querySelectorAll('#colors input:checked')].map(i=>i.dataset.code);
+  const budget_chars = parseInt(document.getElementById('budget').value,10);
+  const treenode_ids = [...checkedTreenodes];
+  const sort_recency = document.getElementById('sort-recency').checked;
+  const include_intro = document.getElementById('include-intro').checked;
+  const include_legend = document.getElementById('include-legend').checked;
+  const status = document.getElementById('status');
+  const btn = document.getElementById('build');
+  if(!colors.length){ status.textContent = 'Pick at least one colour.'; return; }
+  btn.disabled = true; status.textContent = 'Building…';
+  try{
+    const res = await (await fetch('/rag/api/export/build', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({colors, budget_chars, treenode_ids, sort_recency, include_intro, include_legend})})).json();
+    if(res.error){ status.textContent = 'Error: ' + res.error; return; }
+    document.getElementById('output').value = res.text;
+    document.getElementById('output-stats').textContent =
+      `${res.chars.toLocaleString()} chars · ~${res.est_tokens.toLocaleString()} tokens · ${res.unit_count.toLocaleString()} units`
+      + (res.used_fallback ? ' · fell back to bold/uncoloured text (branch has no highlighted colours)' : '');
+    document.getElementById('tiers').innerHTML = res.tiers.map(t=>
+      `<div class="${t.full?'full':'partial'}">${t.name}: ${t.units.toLocaleString()} units, `+
+      `${t.chars.toLocaleString()} chars, ${t.notes}/${t.total_notes} notes ${t.full?'(all)':'(partial — budget ran out)'}</div>`
+    ).join('');
+    status.textContent = '';
+  }catch(e){
+    status.textContent = 'Request failed: ' + e.message;
+  }finally{
+    btn.disabled = false;
+  }
+};
+
+document.getElementById('summarize-btn').onclick = async ()=>{
+  const colors = [...document.querySelectorAll('#colors input:checked')].map(i=>i.dataset.code);
+  const treenode_ids = [...checkedTreenodes];
+  const status = document.getElementById('status');
+  const btn = document.getElementById('summarize-btn');
+  if(!colors.length){ status.textContent = 'Pick at least one colour.'; return; }
+  btn.disabled = true; status.textContent = 'Summarizing via local model (can take a while on a large selection)…';
+  try{
+    const res = await (await fetch('/rag/api/export/summarize', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({colors, treenode_ids})})).json();
+    if(res.error){ status.textContent = 'Error: ' + res.error; return; }
+    document.getElementById('output').value = res.summary;
+    document.getElementById('output-stats').textContent =
+      `summary of ${res.unit_count.toLocaleString()} units via ${res.generator || 'model'}`;
+    document.getElementById('tiers').innerHTML = '';
+    status.textContent = '';
+  }catch(e){
+    status.textContent = 'Request failed: ' + e.message;
+  }finally{
+    btn.disabled = false;
+  }
+};
+
+document.getElementById('curate-btn').onclick = async ()=>{
+  const query = document.getElementById('curate-query').value.trim();
+  const colors = [...document.querySelectorAll('#colors input:checked')].map(i=>i.dataset.code);
+  const include_intro = document.getElementById('include-intro').checked;
+  const include_legend = document.getElementById('include-legend').checked;
+  const status = document.getElementById('curate-status');
+  const btn = document.getElementById('curate-btn');
+  if(!query){ status.textContent = 'Type a question or topic first.'; return; }
+  btn.disabled = true; status.textContent = 'Retrieving relevant notes…';
+  try{
+    const res = await (await fetch('/rag/api/export/curate', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({query, colors: colors.length?colors:null, include_intro, include_legend})})).json();
+    if(res.error){ status.textContent = 'Error: ' + res.error; return; }
+    document.getElementById('output').value = res.text;
+    const perRegime = Object.entries(res.per_regime||{}).map(([k,v])=>`${k}: ${v}`).join(', ');
+    document.getElementById('output-stats').textContent =
+      `${(res.chars||0).toLocaleString()} chars · ${(res.note_uids||[]).length} notes matched (${perRegime})`;
+    document.getElementById('tiers').innerHTML = (res.tiers||[]).map(t=>
+      `<div class="${t.full?'full':'partial'}">${t.name}: ${t.units.toLocaleString()} units, `+
+      `${t.chars.toLocaleString()} chars, ${t.notes}/${t.total_notes} notes ${t.full?'(all)':'(partial — budget ran out)'}</div>`
+    ).join('');
+    status.textContent = 'Done.';
+    setTimeout(()=>{ if(status.textContent==='Done.') status.textContent=''; }, 4000);
+  }catch(e){
+    status.textContent = 'Request failed: ' + e.message;
+  }finally{
+    btn.disabled = false;
+  }
+};
+
+async function copyText(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    return true;
+  }catch(e){
+    // Permissions-API clipboard access can be denied in some browser/
+    // embedded-webview contexts even on a real user click — fall back to
+    // the old select+execCommand route, which works off DOM selection
+    // instead and doesn't depend on that permission.
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    let ok = false;
+    try{ ok = document.execCommand('copy'); }catch(e2){ ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+}
+
+document.getElementById('copy-btn').onclick = async ()=>{
+  const btn = document.getElementById('copy-btn');
+  const orig = btn.textContent;
+  const ok = await copyText(document.getElementById('output').value);
+  btn.textContent = ok ? 'Copied!' : 'Copy failed — select the text manually';
+  setTimeout(()=>btn.textContent=orig, 2000);
+};
+
+document.getElementById('download-btn').onclick = ()=>{
+  const text = document.getElementById('output').value;
+  if(!text) return;
+  const blob = new Blob([text], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'archive_export.txt';
+  a.click();
+};
+
+boot();
+</script>
+</body>
+</html>
