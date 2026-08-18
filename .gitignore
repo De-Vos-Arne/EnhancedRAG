@@ -24,3 +24,9 @@ results/*
 __pycache__/
 *.pyc
 .claude/
+# Generated from the private archive — the whole note tree (titles,
+# structure, colour/salience metadata for ~6,920 notes), not just the
+# redacted subset. The scripts that produce these stay tracked; their
+# output does not.
+analysis/viz_data_page28.json
+analysis/dashboard.html
